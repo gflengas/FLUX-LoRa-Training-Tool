@@ -4,6 +4,23 @@ from src.config import REPLICATE_API_TOKEN
 from src.config import REPLICATE_OWNER
 
 def train_LoRa(zip_file_path, token):
+    """Trains a LoRA model on Replicate using the specified image dataset.
+
+    Creates a private model repository on Replicate and initiates 
+    fine-tuning of a FLUX.1 model with the provided training images.
+
+    Args:
+        zip_file_path (str): Path to the zip file containing training images.
+        token (str): Unique identifier for the model, used in naming and 
+            as a trigger word during training.
+
+    Prints:
+        Model creation URL, training status updates, and final model URL.
+
+    Notes:
+        Requires Replicate credentials to be configured.
+        Uses a specific Replicate training version for FLUX.1 models.
+    """
     # Create the model repository on Replicate. All the models are private
     model = rep.models.create(
         owner=REPLICATE_OWNER,
@@ -52,8 +69,3 @@ def train_LoRa(zip_file_path, token):
         print(
             f"Model URL: https://replicate.com/{REPLICATE_OWNER}/flux-{token}"
         )
-    
-
-def training_monitoring(training):
-    training.reload()
-    return training.status
