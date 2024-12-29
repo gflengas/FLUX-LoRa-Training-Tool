@@ -6,24 +6,26 @@ import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { ImageUpload } from './ImageUpload';
 import { ImageGuidelines } from './ImageGuidelines';
-import { ModelInfo, ModelType, TrainingStatus, ModelCharacteristics } from '@/types';
+import { ModelInfo, ModelType, TrainingStatus, ModelCharacteristics, TrainingSettings } from '@/types';
 import { HelpCircle, ImageIcon, Play } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { HumanCharacteristicsForm } from './characteristics/HumanCharacteristics';
 import { PetCharacteristicsForm } from './characteristics/PetCharacteristics';
 import { ItemCharacteristicsForm } from './characteristics/ItemCharacteristics';
 import { TrainingStatusPanel } from './TrainingStatus';
+import { startTraining } from '@/lib/api/training';
+import { uploadImages } from '@/lib/api/upload';
+import { useToast } from '@/hooks/use-toast';
 
 interface ModelInfoFormProps {
   onInfoChange: (info: Partial<ModelInfo>) => void;
+  trainingSettings: Partial<TrainingSettings>;
 }
 
-export function ModelInfoForm({ onInfoChange }: ModelInfoFormProps) {
+export function ModelInfoForm({ onInfoChange, trainingSettings }: ModelInfoFormProps) {
+  const { toast } = useToast();
+  const [modelInfo, setModelInfo] = useState<Partial<ModelInfo>>({});
   const [modelType, setModelType] = useState<ModelType>('human');
   const [isUploadEnabled, setIsUploadEnabled] = useState(false);
   const [showGuidelines, setShowGuidelines] = useState(false);
@@ -31,14 +33,57 @@ export function ModelInfoForm({ onInfoChange }: ModelInfoFormProps) {
   const [trainingStatus, setTrainingStatus] = useState<TrainingStatus>({
     status: 'idle',
   });
+  const [isLoading, setIsLoading] = useState(false);
 
-  const handleStartTraining = () => {
-    // Simulate training start with Replicate URL and model destination
-    setTrainingStatus({
-      status: 'training',
-      replicateUrl: 'https://replicate.com/training/abc123',
-      modelDestination: '/models/custom-lora-v1',
-    });
+  const handleStartTraining = async () => {
+    if (!modelInfo.images || modelInfo.images.length === 0) {
+      toast({
+        title: 'Error',
+        description: 'Please upload at least one image',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setIsLoading(true);
+    setTrainingStatus({ status: 'training' });
+
+    try {
+      // Upload images first
+      const imageLocations = await uploadImages(modelInfo.images);
+
+      // Start training process
+      const response = await startTraining({
+        modelInfo,
+        settings: trainingSettings,
+        imageLocations,
+      });
+
+      setTrainingStatus({
+        status: 'training',
+        replicateUrl: response.replicateUrl,
+        modelDestination: response.modelDestination,
+      });
+
+      toast({
+        title: 'Training Started',
+        description: 'Your model training has begun successfully',
+      });
+    } catch (error) {
+      console.error('Training error:', error);
+      setTrainingStatus({
+        status: 'failed',
+        error: error instanceof Error ? error.message : 'Failed to start training',
+      });
+
+      toast({
+        title: 'Error',
+        description: 'Failed to start training. Please try again.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleTypeChange = (type: ModelType) => {
@@ -165,10 +210,10 @@ export function ModelInfoForm({ onInfoChange }: ModelInfoFormProps) {
           <Button
             className="w-full"
             onClick={handleStartTraining}
-            disabled={trainingStatus.status === 'training'}
+            disabled={isLoading || trainingStatus.status === 'training'}
           >
             <Play className="mr-2 h-4 w-4" />
-            Start Training
+            {isLoading ? 'Starting Training...' : 'Start Training'}
           </Button>
 
           <TrainingStatusPanel status={trainingStatus} />
