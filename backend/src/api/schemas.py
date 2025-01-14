@@ -9,7 +9,8 @@ class ModelInfo(BaseModel):
 class TrainingSettings(BaseModel):
     replicateUsername: str
     replicateApiKey: str
-    xaiApiKey: Optional[str]
+    # Make xaiApiKey optional with None as default
+    xaiApiKey: Optional[str] = None
     steps: int
     loraRank: int
     learningRate: float
@@ -17,8 +18,8 @@ class TrainingSettings(BaseModel):
     resolution: str
     optimizer: str
     autoCaptioning: bool
-    hfRepoId: Optional[str]
-    hfToken: Optional[str]
+    hfRepoId: Optional[str] = None
+    hfToken: Optional[str] = None
     captionDropoutRate: float
 
 class TrainingRequest(BaseModel):
