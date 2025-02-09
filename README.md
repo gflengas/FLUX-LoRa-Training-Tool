@@ -11,6 +11,48 @@ image generation capabilities.
 
 The tool leverages the XAI API to automatically generate detailed image descriptions by combining user-provided characteristics with image analysis, enhancing the quality of model training. All model training is performed securely through Replicate's API infrastructure. For user privacy and security, no API keys are stored or shared in any way - they are only used during the active training session.
 
+## 🐳 Docker Setup (Recommended)
+
+The easiest way to run this application is using Docker. This method ensures consistent behavior across different environments.
+
+### Prerequisites
+- [Docker](https://docs.docker.com/get-docker/)
+- [Docker Compose](https://docs.docker.com/compose/install/)
+
+### Installation Steps
+
+1. **Install Docker and Docker Compose**
+   ```bash
+   # For Ubuntu/Debian
+   sudo apt update
+   sudo apt install docker.io docker-compose
+   
+   # Add your user to docker group (requires logout/login to take effect)
+   sudo usermod -aG docker $USER
+   ```
+
+2. **Clone the Repository**
+   ```bash
+   git clone [your-repository-url]
+   cd FLUX-LoRa-Training-Tool
+   ```
+
+3. **Start the Application**
+   ```bash
+   docker-compose up --build
+   ```
+
+   The application will be available at:
+   - Frontend: http://localhost:3000
+   - Backend API: http://localhost:5000
+
+4. **Stop the Application**
+   ```bash
+   # Press Ctrl+C or run:
+   docker-compose down
+   ```
+
+
 ## Why Use FLUX LoRa Training Tool?
 
 - 🚀 **User-Friendly Interface**: Simple and intuitive web interface for training LoRA models without command-line complexity
