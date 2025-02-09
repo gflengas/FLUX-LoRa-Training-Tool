@@ -40,20 +40,20 @@ def train_LoRa(zip_file_path, settings, token):
         version="ostris/flux-dev-lora-trainer:e440909d3512c31646ee2e0c7d6f6f4923224863a6a10c494606e79fb5844497",
         input={
 
-            "steps": settings.steps,
-            "lora_rank": settings.lora_rank,
-            "optimizer": settings.optimizer,
-            "batch_size": settings.batch_size,
-            "resolution": settings.resolution,
-            "autocaption": settings.autocaption,
+            "steps": 1000,
+            "lora_rank": 16,
+            "optimizer": "adamw8bit",
+            "batch_size": 1,
+            "resolution": "512,768,1024",
+            "autocaption": False,
             "input_images": open(zip_file_path, "rb"),
-            "trigger_word": settings.token,
-            "learning_rate": settings.learning_rate,
+            "trigger_word": token,
+            "learning_rate": 0.0004,
             "wandb_project": "flux_train_replicate",
-            "wandb_save_interval": settings.wandb_save_interval,
-            "caption_dropout_rate": settings.caption_dropout_rate,
-            "cache_latents_to_disk": settings.cache_latents_to_disk,
-            "wandb_sample_interval": settings.wandb_sample_interval
+            "wandb_save_interval": 100,
+            "caption_dropout_rate": 0.05,
+            "cache_latents_to_disk": False,
+            "wandb_sample_interval": 100
         },
     )
  
@@ -112,19 +112,19 @@ def train_LoRa_with_api(zip_file_path, settings, token):
         input={
 
             "steps": settings.steps,
-            "lora_rank": settings.lora_rank,
+            "lora_rank": settings.loraRank,
             "optimizer": settings.optimizer,
-            "batch_size": settings.batch_size,
+            "batch_size": settings.batchSize,
             "resolution": settings.resolution,
-            "autocaption": settings.autocaption,
+            "autocaption": settings.autoCaptioning,
             "input_images": open(zip_file_path, "rb"),
-            "trigger_word": settings.token,
-            "learning_rate": settings.learning_rate,
+            "trigger_word": token,
+            "learning_rate": settings.learningRate,
             "wandb_project": "flux_train_replicate",
-            "wandb_save_interval": settings.wandb_save_interval,
-            "caption_dropout_rate": settings.caption_dropout_rate,
-            "cache_latents_to_disk": settings.cache_latents_to_disk,
-            "wandb_sample_interval": settings.wandb_sample_interval
+            "wandb_save_interval": 100,
+            "caption_dropout_rate": settings.captionDropoutRate,
+            "cache_latents_to_disk": False,
+            "wandb_sample_interval": 100
         },
     )
  

@@ -6,7 +6,7 @@ import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { ImageGuidelines } from './ImageGuidelines';
 import { ModelInfo, ModelType, TrainingStatus, ModelCharacteristics, TrainingSettings, HumanCharacteristics, PetCharacteristics, ItemCharacteristics } from '@/types';
-import { HelpCircle, ImageIcon, Play, Upload } from 'lucide-react';
+import { HelpCircle, ImageIcon, Play, Upload, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { HumanCharacteristicsForm } from './characteristics/HumanCharacteristics';
@@ -67,6 +67,7 @@ export function ModelInfoForm({ onInfoChange, trainingSettings, modelInfo }: Mod
 
   const handleStartTraining = async () => {
     console.log('Button clicked - handleStartTraining called');
+    setIsLoading(true);
     console.log('Current state:', {
       modelInfo,
       trainingSettings,
@@ -83,6 +84,7 @@ export function ModelInfoForm({ onInfoChange, trainingSettings, modelInfo }: Mod
         description: 'Please enter a model name',
         variant: 'destructive',
       });
+      setIsLoading(false);
       return;
     }
 
@@ -93,6 +95,7 @@ export function ModelInfoForm({ onInfoChange, trainingSettings, modelInfo }: Mod
         description: 'Please select a model type',
         variant: 'destructive',
       });
+      setIsLoading(false);
       return;
     }
 
@@ -103,6 +106,7 @@ export function ModelInfoForm({ onInfoChange, trainingSettings, modelInfo }: Mod
         description: 'Please fill in the characteristics',
         variant: 'destructive',
       });
+      setIsLoading(false);
       return;
     }
 
@@ -113,6 +117,7 @@ export function ModelInfoForm({ onInfoChange, trainingSettings, modelInfo }: Mod
         description: 'Please select a ZIP file',
         variant: 'destructive',
       });
+      setIsLoading(false);
       return;
     }
 
@@ -151,8 +156,9 @@ export function ModelInfoForm({ onInfoChange, trainingSettings, modelInfo }: Mod
 
       setTrainingStatus({
         status: 'training',
-        replicateUrl: response.replicateUrl,
-        modelDestination: response.modelDestination,
+        trainingId: response.trainingId,
+        modelUrl: response.modelUrl,
+        replicateUrl: `https://replicate.com/p/${response.trainingId}` // Construct the proper training URL
       });
 
       toast({
@@ -325,8 +331,17 @@ export function ModelInfoForm({ onInfoChange, trainingSettings, modelInfo }: Mod
               onClick={handleStartTraining}
               disabled={isLoading || trainingStatus.status === 'training' || !zipFile}
             >
-              <Play className="mr-2 h-4 w-4" />
-              {isLoading ? 'Starting Training...' : 'Start Training'}
+              {isLoading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Starting Training...
+                </>
+              ) : (
+                <>
+                  <Play className="mr-2 h-4 w-4" />
+                  Start Training
+                </>
+              )}
             </Button>
 
             <TrainingStatusPanel status={trainingStatus} />

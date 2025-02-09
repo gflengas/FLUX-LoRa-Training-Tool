@@ -87,19 +87,16 @@ def start_training():
         fp.delete_temp_folder("./temp")
 
         # Start training process
-        # train_info = train_LoRa_with_api(output_zip, req_data.settings, req_data.modelInfo.name)
+        train_info = train_LoRa_with_api(output_zip, req_data.settings, req_data.modelInfo.name)
         
-        # response = TrainingResponse(
-        #     status=train_info["status"],
-        #     trainingId=train_info["id"],
-        #     modelUrl=train_info["modelUrl"],
-        #     trainingUrl=train_info["trainingUrl"]
-        # )
-        response = {
-            "status": "success",
-            "message": "Training started successfully"
-        }
-        return jsonify(response)
+        response = TrainingResponse(
+            status=train_info["status"],
+            trainingId=train_info["id"],
+            modelUrl=train_info["modelUrl"],
+            trainingUrl=train_info["trainingUrl"]
+        )
+        
+        return jsonify(response.model_dump())
     except Exception as e:
         return jsonify({
             "status": "error",
