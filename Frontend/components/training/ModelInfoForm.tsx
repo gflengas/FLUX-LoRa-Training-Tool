@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
@@ -21,21 +21,33 @@ import { Card } from '@/components/ui/card';
 interface ModelInfoFormProps {
   onInfoChange: (info: Partial<ModelInfo>) => void;
   trainingSettings: Partial<TrainingSettings>;
+  modelInfo: Partial<ModelInfo>;
 }
 
-export function ModelInfoForm({ onInfoChange, trainingSettings }: ModelInfoFormProps) {
+export function ModelInfoForm({ onInfoChange, trainingSettings, modelInfo }: ModelInfoFormProps) {
   const { toast } = useToast();
-  const [modelInfo, setModelInfo] = useState<Partial<ModelInfo>>({});
-  const [modelType, setModelType] = useState<ModelType>('human');
+  const [modelType, setModelType] = useState<ModelType>(modelInfo.type || 'human');
   const [imageLocation, setImageLocation] = useState<string>('');
   const [zipFile, setZipFile] = useState<File | null>(null);
   const [showGuidelines, setShowGuidelines] = useState(false);
   const [hasAcceptedGuidelines, setHasAcceptedGuidelines] = useState(false);
-  const [characteristics, setCharacteristics] = useState<Partial<ModelCharacteristics>>({});
+  const [characteristics, setCharacteristics] = useState<Partial<ModelCharacteristics>>(modelInfo.characteristics || {});
   const [trainingStatus, setTrainingStatus] = useState<TrainingStatus>({
     status: 'idle',
   });
   const [isLoading, setIsLoading] = useState(false);
+
+  // Set initial model type in parent state
+  useEffect(() => {
+    if (!modelInfo.type) {
+      onInfoChange({ ...modelInfo, type: modelType });
+    }
+  }, []);
+
+  useEffect(() => {
+    setModelType(modelInfo.type || 'human');
+    setCharacteristics(modelInfo.characteristics || {});
+  }, [modelInfo]);
 
   const onDrop = useCallback((acceptedFiles: File[]) => {
     const file = acceptedFiles[0];
@@ -54,34 +66,88 @@ export function ModelInfoForm({ onInfoChange, trainingSettings }: ModelInfoFormP
   });
 
   const handleStartTraining = async () => {
-    if (!imageLocation) {
+    console.log('Button clicked - handleStartTraining called');
+    console.log('Current state:', {
+      modelInfo,
+      trainingSettings,
+      imageLocation,
+      zipFile,
+      characteristics
+    });
+    
+    // Validate model info
+    if (!modelInfo.name) {
+      console.log('Validation failed: No model name');
       toast({
         title: 'Error',
-        description: 'Please enter the zip file location',
+        description: 'Please enter a model name',
         variant: 'destructive',
       });
       return;
     }
 
-    if (!modelInfo.name || !modelInfo.type || !modelInfo.characteristics) {
+    if (!modelInfo.type) {
+      console.log('Validation failed: No model type');
       toast({
         title: 'Error',
-        description: 'Please fill in all model information',
+        description: 'Please select a model type',
         variant: 'destructive',
       });
       return;
     }
 
-    setIsLoading(true);
-    setTrainingStatus({ status: 'training' });
+    if (!modelInfo.characteristics || Object.keys(modelInfo.characteristics).length === 0) {
+      console.log('Validation failed: No characteristics', modelInfo.characteristics);
+      toast({
+        title: 'Error',
+        description: 'Please fill in the characteristics',
+        variant: 'destructive',
+      });
+      return;
+    }
 
+    if (!zipFile) {
+      console.log('Validation failed: No ZIP file');
+      toast({
+        title: 'Error',
+        description: 'Please select a ZIP file',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    // Create FormData to send the file
+    const formData = new FormData();
+    formData.append('file', zipFile);
+
+    // First upload the file
     try {
-      // Start training process
-      const response = await startTraining({
-        modelInfo: modelInfo as ModelInfo,
-        settings: trainingSettings as TrainingSettings,
-        imageLocation: imageLocation,
+      const uploadResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/upload`, {
+        method: 'POST',
+        body: formData,
       });
+
+      if (!uploadResponse.ok) {
+        throw new Error('Failed to upload file');
+      }
+
+      const { filePath } = await uploadResponse.json();
+
+      // Now start the training with the server-side file path
+      const characteristicsString = Object.entries(modelInfo.characteristics)
+        .map(([key, value]) => `${key}: ${value}`)
+        .join(', ');
+
+      const response = await startTraining({
+        modelInfo: {
+          ...(modelInfo as ModelInfo),
+          characteristics: characteristicsString as unknown as ModelCharacteristics,
+        },
+        settings: trainingSettings as TrainingSettings,
+        imageLocation: filePath, // Use the server-side file path
+      });
+
+      console.log('Training response:', response);
 
       setTrainingStatus({
         status: 'training',
@@ -102,7 +168,7 @@ export function ModelInfoForm({ onInfoChange, trainingSettings }: ModelInfoFormP
 
       toast({
         title: 'Error',
-        description: 'Failed to start training. Please try again.',
+        description: error instanceof Error ? error.message : 'Failed to start training. Please try again.',
         variant: 'destructive',
       });
     } finally {
@@ -113,12 +179,21 @@ export function ModelInfoForm({ onInfoChange, trainingSettings }: ModelInfoFormP
   const handleTypeChange = (type: ModelType) => {
     setModelType(type);
     setCharacteristics({});
-    onInfoChange({ type, characteristics: {} as ModelCharacteristics });
+    // Update parent state with new type and reset characteristics
+    onInfoChange({
+      ...modelInfo,
+      type,
+      characteristics: {} as ModelCharacteristics
+    });
   };
 
   const handleCharacteristicsChange = (newCharacteristics: ModelCharacteristics) => {
     setCharacteristics(newCharacteristics);
-    onInfoChange({ characteristics: newCharacteristics });
+    // Update parent state with new characteristics while preserving type
+    onInfoChange({
+      ...modelInfo,
+      characteristics: newCharacteristics
+    });
   };
 
   return (
@@ -128,14 +203,15 @@ export function ModelInfoForm({ onInfoChange, trainingSettings }: ModelInfoFormP
         <Input
           id="name"
           placeholder="Enter model name"
-          onChange={(e) => onInfoChange({ name: e.target.value })}
+          value={modelInfo.name || ''}
+          onChange={(e) => onInfoChange({ ...modelInfo, name: e.target.value })}
         />
       </div>
 
       <div className="space-y-2">
         <Label>Model Type</Label>
         <RadioGroup
-          defaultValue="human"
+          value={modelType}
           onValueChange={(value) => handleTypeChange(value as ModelType)}
         >
           <div className="flex space-x-4">
@@ -179,41 +255,56 @@ export function ModelInfoForm({ onInfoChange, trainingSettings }: ModelInfoFormP
 
       <div className="space-y-4">
         <div className="flex items-center justify-between">
-          <Label>Training Images ZIP File</Label>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setShowGuidelines(true)}
-              >
-                <HelpCircle className="h-4 w-4" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>View image guidelines</TooltipContent>
-          </Tooltip>
+          <Label>Training Images</Label>
+          {hasAcceptedGuidelines && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setShowGuidelines(true)}
+                >
+                  <HelpCircle className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>View image guidelines</TooltipContent>
+            </Tooltip>
+          )}
         </div>
 
-        <Card
-          {...getRootProps()}
-          className="border-2 border-dashed p-8 text-center cursor-pointer hover:border-primary transition-colors"
-        >
-          <input {...getInputProps()} />
-          <Upload className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
-          {isDragActive ? (
-            <p className="text-sm text-muted-foreground">Drop the ZIP file here...</p>
-          ) : (
-            <p className="text-sm text-muted-foreground">
-              Drag & drop your ZIP file here, or click to select
-            </p>
-          )}
-        </Card>
+        {!hasAcceptedGuidelines ? (
+          <Button
+            variant="outline"
+            className="w-full"
+            onClick={() => setShowGuidelines(true)}
+          >
+            <ImageIcon className="mr-2 h-4 w-4" />
+            View Image Guidelines
+          </Button>
+        ) : (
+          <>
+            <Card
+              {...getRootProps()}
+              className="border-2 border-dashed p-8 text-center cursor-pointer hover:border-primary transition-colors"
+            >
+              <input {...getInputProps()} />
+              <Upload className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
+              {isDragActive ? (
+                <p className="text-sm text-muted-foreground">Drop the ZIP file here...</p>
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  Drag & drop your ZIP file here, or click to select
+                </p>
+              )}
+            </Card>
 
-        {zipFile && (
-          <Card className="p-3 flex items-center space-x-2">
-            <ImageIcon className="h-4 w-4 text-muted-foreground" />
-            <span className="text-sm truncate">{zipFile.name}</span>
-          </Card>
+            {zipFile && (
+              <Card className="p-3 flex items-center space-x-2">
+                <ImageIcon className="h-4 w-4 text-muted-foreground" />
+                <span className="text-sm truncate">{zipFile.name}</span>
+              </Card>
+            )}
+          </>
         )}
 
         <ImageGuidelines 
@@ -227,7 +318,7 @@ export function ModelInfoForm({ onInfoChange, trainingSettings }: ModelInfoFormP
       </div>
 
       <div className="space-y-4">
-        {hasAcceptedGuidelines ? (
+        {hasAcceptedGuidelines && (
           <>
             <Button
               className="w-full"
@@ -240,15 +331,6 @@ export function ModelInfoForm({ onInfoChange, trainingSettings }: ModelInfoFormP
 
             <TrainingStatusPanel status={trainingStatus} />
           </>
-        ) : (
-          <Button
-            variant="outline"
-            className="w-full"
-            onClick={() => setShowGuidelines(true)}
-          >
-            <ImageIcon className="mr-2 h-4 w-4" />
-            View Image Guidelines
-          </Button>
         )}
       </div>
     </div>

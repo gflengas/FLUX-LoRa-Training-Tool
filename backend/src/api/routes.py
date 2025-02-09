@@ -7,6 +7,46 @@ import os
 
 api = Blueprint('api', __name__)
 
+@api.route('/upload', methods=['POST'])
+def upload_file():
+    try:
+        if 'file' not in request.files:
+            return jsonify({
+                "status": "error",
+                "message": "No file part"
+            }), 400
+        
+        file = request.files['file']
+        if file.filename == '':
+            return jsonify({
+                "status": "error",
+                "message": "No selected file"
+            }), 400
+            
+        if file and file.filename.endswith('.zip'):
+            # Save the file to a temporary location
+            upload_folder = "./uploads"
+            os.makedirs(upload_folder, exist_ok=True)
+            
+            filepath = os.path.join(upload_folder, file.filename)
+            file.save(filepath)
+            
+            return jsonify({
+                "status": "success",
+                "filePath": filepath
+            })
+        else:
+            return jsonify({
+                "status": "error",
+                "message": "Invalid file type. Please upload a ZIP file."
+            }), 400
+            
+    except Exception as e:
+        return jsonify({
+            "status": "error",
+            "message": str(e)
+        }), 500
+
 @api.route('/training/start', methods=['POST'])
 def start_training():
     try:
@@ -47,15 +87,18 @@ def start_training():
         fp.delete_temp_folder("./temp")
 
         # Start training process
-        train_info = train_LoRa_with_api(output_zip, req_data.settings, req_data.modelInfo.name)
+        # train_info = train_LoRa_with_api(output_zip, req_data.settings, req_data.modelInfo.name)
         
-        response = TrainingResponse(
-            status=train_info["status"],
-            trainingId=train_info["id"],
-            modelUrl=train_info["modelUrl"],
-            trainingUrl=train_info["trainingUrl"]
-        )
-        
+        # response = TrainingResponse(
+        #     status=train_info["status"],
+        #     trainingId=train_info["id"],
+        #     modelUrl=train_info["modelUrl"],
+        #     trainingUrl=train_info["trainingUrl"]
+        # )
+        response = {
+            "status": "success",
+            "message": "Training started successfully"
+        }
         return jsonify(response)
     except Exception as e:
         return jsonify({

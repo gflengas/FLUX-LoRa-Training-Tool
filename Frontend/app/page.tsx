@@ -44,6 +44,7 @@ export default function Home() {
               </CardHeader>
               <CardContent>
                 <ModelInfoForm
+                  modelInfo={modelInfo}
                   onInfoChange={(info) => setModelInfo({ ...modelInfo, ...info })}
                   trainingSettings={trainingSettings}
                 />
@@ -61,6 +62,7 @@ export default function Home() {
               </CardHeader>
               <CardContent>
                 <TrainingSettings
+                  settings={trainingSettings}
                   onSettingsChange={(settings) =>
                     setTrainingSettings({ ...trainingSettings, ...settings })
                   }

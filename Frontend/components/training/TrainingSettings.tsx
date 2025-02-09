@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -23,6 +23,7 @@ import {
 
 interface TrainingSettingsProps {
   onSettingsChange: (settings: Partial<Settings>) => void;
+  settings: Partial<Settings>;
 }
 
 const defaultSettings: Settings = {
@@ -41,16 +42,22 @@ const defaultSettings: Settings = {
   optimizer: 'adamw8bit',
 };
 
-export function TrainingSettings({ onSettingsChange }: TrainingSettingsProps) {
-  const [settings, setSettings] = useState<Settings>(defaultSettings);
+export function TrainingSettings({ onSettingsChange, settings: initialSettings }: TrainingSettingsProps) {
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [showReplicateKey, setShowReplicateKey] = useState(false);
   const [showXaiKey, setShowXaiKey] = useState(false);
 
+  // Initialize settings with defaults on mount
+  useEffect(() => {
+    const mergedSettings = {
+      ...defaultSettings,
+      ...initialSettings
+    };
+    onSettingsChange(mergedSettings);
+  }, []);
+
   const handleChange = <K extends keyof Settings>(key: K, value: Settings[K]) => {
-    const newSettings = { ...settings, [key]: value };
-    setSettings(newSettings);
-    onSettingsChange(newSettings);
+    onSettingsChange({ ...initialSettings, [key]: value });
   };
 
   return (
@@ -60,7 +67,7 @@ export function TrainingSettings({ onSettingsChange }: TrainingSettingsProps) {
           <Label htmlFor="replicateUsername">Replicate Username</Label>
           <Input
             id="replicateUsername"
-            value={settings.replicateUsername}
+            value={initialSettings.replicateUsername || ''}
             onChange={(e) => handleChange('replicateUsername', e.target.value)}
             placeholder="Enter your Replicate username"
           />
@@ -72,7 +79,7 @@ export function TrainingSettings({ onSettingsChange }: TrainingSettingsProps) {
             <Input
               id="replicateApiKey"
               type={showReplicateKey ? 'text' : 'password'}
-              value={settings.replicateApiKey}
+              value={initialSettings.replicateApiKey || ''}
               onChange={(e) => handleChange('replicateApiKey', e.target.value)}
               placeholder="Enter your Replicate API key"
             />
@@ -109,7 +116,7 @@ export function TrainingSettings({ onSettingsChange }: TrainingSettingsProps) {
             <Input
               id="xaiApiKey"
               type={showXaiKey ? 'text' : 'password'}
-              value={settings.xaiApiKey}
+              value={initialSettings.xaiApiKey || ''}
               onChange={(e) => handleChange('xaiApiKey', e.target.value)}
               placeholder="Enter your xAI API key"
             />
@@ -132,7 +139,7 @@ export function TrainingSettings({ onSettingsChange }: TrainingSettingsProps) {
           <Label htmlFor="autoCaptioning">Auto Captioning</Label>
           <Switch
             id="autoCaptioning"
-            checked={settings.autoCaptioning}
+            checked={initialSettings.autoCaptioning || false}
             onCheckedChange={(checked) => handleChange('autoCaptioning', checked)}
           />
         </div>
@@ -143,7 +150,7 @@ export function TrainingSettings({ onSettingsChange }: TrainingSettingsProps) {
             id="steps"
             type="number"
             min={1}
-            value={settings.steps}
+            value={initialSettings.steps || defaultSettings.steps}
             onChange={(e) => handleChange('steps', parseInt(e.target.value))}
           />
         </div>
@@ -174,7 +181,7 @@ export function TrainingSettings({ onSettingsChange }: TrainingSettingsProps) {
                 id="loraRank"
                 type="number"
                 min={1}
-                value={settings.loraRank}
+                value={initialSettings.loraRank || defaultSettings.loraRank}
                 onChange={(e) => handleChange('loraRank', parseInt(e.target.value))}
               />
             </div>
@@ -183,7 +190,7 @@ export function TrainingSettings({ onSettingsChange }: TrainingSettingsProps) {
               <Label htmlFor="hfRepoId">Hugging Face Repository ID</Label>
               <Input
                 id="hfRepoId"
-                value={settings.hfRepoId}
+                value={initialSettings.hfRepoId || ''}
                 onChange={(e) => handleChange('hfRepoId', e.target.value)}
                 placeholder="username/repository"
               />
@@ -193,7 +200,7 @@ export function TrainingSettings({ onSettingsChange }: TrainingSettingsProps) {
               <Label htmlFor="hfToken">Hugging Face Token</Label>
               <Input
                 id="hfToken"
-                value={settings.hfToken}
+                value={initialSettings.hfToken || ''}
                 onChange={(e) => handleChange('hfToken', e.target.value)}
                 placeholder="Enter your Hugging Face token"
               />
@@ -206,7 +213,7 @@ export function TrainingSettings({ onSettingsChange }: TrainingSettingsProps) {
                 type="number"
                 step="0.0001"
                 min="0"
-                value={settings.learningRate}
+                value={initialSettings.learningRate || defaultSettings.learningRate}
                 onChange={(e) => handleChange('learningRate', parseFloat(e.target.value))}
               />
             </div>
@@ -217,7 +224,7 @@ export function TrainingSettings({ onSettingsChange }: TrainingSettingsProps) {
                 id="batchSize"
                 type="number"
                 min={1}
-                value={settings.batchSize}
+                value={initialSettings.batchSize || defaultSettings.batchSize}
                 onChange={(e) => handleChange('batchSize', parseInt(e.target.value))}
               />
             </div>
@@ -226,7 +233,7 @@ export function TrainingSettings({ onSettingsChange }: TrainingSettingsProps) {
               <Label htmlFor="resolution">Resolution</Label>
               <Input
                 id="resolution"
-                value={settings.resolution}
+                value={initialSettings.resolution || defaultSettings.resolution}
                 onChange={(e) => handleChange('resolution', e.target.value)}
                 placeholder="512,768,1024"
               />
@@ -243,7 +250,7 @@ export function TrainingSettings({ onSettingsChange }: TrainingSettingsProps) {
                 step="0.01"
                 min="0"
                 max="1"
-                value={settings.captionDropoutRate}
+                value={initialSettings.captionDropoutRate || defaultSettings.captionDropoutRate}
                 onChange={(e) => handleChange('captionDropoutRate', parseFloat(e.target.value))}
               />
             </div>
@@ -251,7 +258,7 @@ export function TrainingSettings({ onSettingsChange }: TrainingSettingsProps) {
             <div className="space-y-2">
               <Label htmlFor="optimizer">Optimizer</Label>
               <Select
-                value={settings.optimizer}
+                value={initialSettings.optimizer || defaultSettings.optimizer}
                 onValueChange={(value) => handleChange('optimizer', value as OptimizerType)}
               >
                 <SelectTrigger id="optimizer">
