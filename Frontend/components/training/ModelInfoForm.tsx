@@ -18,14 +18,17 @@ import { useToast } from '@/hooks/use-toast';
 import { useDropzone } from 'react-dropzone';
 import { Card } from '@/components/ui/card';
 
+// Form component for collecting model information and handling training initiation
 interface ModelInfoFormProps {
-  onInfoChange: (info: Partial<ModelInfo>) => void;
-  trainingSettings: Partial<TrainingSettings>;
-  modelInfo: Partial<ModelInfo>;
+  onInfoChange: (info: Partial<ModelInfo>) => void;  // Callback to update parent state
+  trainingSettings: Partial<TrainingSettings>;       // Training configuration from parent
+  modelInfo: Partial<ModelInfo>;                     // Current model information
 }
 
 export function ModelInfoForm({ onInfoChange, trainingSettings, modelInfo }: ModelInfoFormProps) {
   const { toast } = useToast();
+  
+  // Local state management for form fields and UI state
   const [modelType, setModelType] = useState<ModelType>(modelInfo.type || 'human');
   const [imageLocation, setImageLocation] = useState<string>('');
   const [zipFile, setZipFile] = useState<File | null>(null);
@@ -37,18 +40,20 @@ export function ModelInfoForm({ onInfoChange, trainingSettings, modelInfo }: Mod
   });
   const [isLoading, setIsLoading] = useState(false);
 
-  // Set initial model type in parent state
+  // Initialize model type in parent state if not already set
   useEffect(() => {
     if (!modelInfo.type) {
       onInfoChange({ ...modelInfo, type: modelType });
     }
   }, []);
 
+  // Sync local state with parent state changes
   useEffect(() => {
     setModelType(modelInfo.type || 'human');
     setCharacteristics(modelInfo.characteristics || {});
   }, [modelInfo]);
 
+  // File upload handling using react-dropzone
   const onDrop = useCallback((acceptedFiles: File[]) => {
     const file = acceptedFiles[0];
     if (file) {
@@ -65,6 +70,7 @@ export function ModelInfoForm({ onInfoChange, trainingSettings, modelInfo }: Mod
     multiple: false
   });
 
+  // Handles the initiation of model training process
   const handleStartTraining = async () => {
     console.log('Button clicked - handleStartTraining called');
     setIsLoading(true);
@@ -76,7 +82,7 @@ export function ModelInfoForm({ onInfoChange, trainingSettings, modelInfo }: Mod
       characteristics
     });
     
-    // Validate model info
+    // Validation checks before starting training
     if (!modelInfo.name) {
       console.log('Validation failed: No model name');
       toast({
@@ -121,12 +127,12 @@ export function ModelInfoForm({ onInfoChange, trainingSettings, modelInfo }: Mod
       return;
     }
 
-    // Create FormData to send the file
-    const formData = new FormData();
-    formData.append('file', zipFile);
-
-    // First upload the file
+    // Upload training data and start the training process
     try {
+      const formData = new FormData();
+      formData.append('file', zipFile);
+
+      // First upload the training data
       const uploadResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/upload`, {
         method: 'POST',
         body: formData,
@@ -138,27 +144,27 @@ export function ModelInfoForm({ onInfoChange, trainingSettings, modelInfo }: Mod
 
       const { filePath } = await uploadResponse.json();
 
-      // Now start the training with the server-side file path
+      // Format characteristics for training
       const characteristicsString = Object.entries(modelInfo.characteristics)
         .map(([key, value]) => `${key}: ${value}`)
         .join(', ');
 
+      // Start the training process
       const response = await startTraining({
         modelInfo: {
           ...(modelInfo as ModelInfo),
           characteristics: characteristicsString as unknown as ModelCharacteristics,
         },
         settings: trainingSettings as TrainingSettings,
-        imageLocation: filePath, // Use the server-side file path
+        imageLocation: filePath,
       });
 
-      console.log('Training response:', response);
-
+      // Update training status and notify user
       setTrainingStatus({
         status: 'training',
         trainingId: response.trainingId,
         modelUrl: response.modelUrl,
-        replicateUrl: `https://replicate.com/p/${response.trainingId}` // Construct the proper training URL
+        replicateUrl: `https://replicate.com/p/${response.trainingId}`
       });
 
       toast({

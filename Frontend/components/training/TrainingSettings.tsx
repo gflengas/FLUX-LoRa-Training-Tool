@@ -21,11 +21,13 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 
+// Component for configuring model training parameters and API credentials
 interface TrainingSettingsProps {
-  onSettingsChange: (settings: Partial<Settings>) => void;
-  settings: Partial<Settings>;
+  onSettingsChange: (settings: Partial<Settings>) => void;  // Callback to update parent state
+  settings: Partial<Settings>;                              // Current settings from parent
 }
 
+// Default training parameters and API configuration
 const defaultSettings: Settings = {
   replicateUsername: '',
   replicateApiKey: '',
@@ -43,11 +45,12 @@ const defaultSettings: Settings = {
 };
 
 export function TrainingSettings({ onSettingsChange, settings: initialSettings }: TrainingSettingsProps) {
+  // UI state for showing/hiding sensitive information and advanced settings
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [showReplicateKey, setShowReplicateKey] = useState(false);
   const [showXaiKey, setShowXaiKey] = useState(false);
 
-  // Initialize settings with defaults on mount
+  // Initialize settings with defaults on component mount
   useEffect(() => {
     const mergedSettings = {
       ...defaultSettings,
@@ -56,12 +59,14 @@ export function TrainingSettings({ onSettingsChange, settings: initialSettings }
     onSettingsChange(mergedSettings);
   }, []);
 
+  // Generic handler for updating any setting field
   const handleChange = <K extends keyof Settings>(key: K, value: Settings[K]) => {
     onSettingsChange({ ...initialSettings, [key]: value });
   };
 
   return (
     <div className="space-y-6">
+      {/* API Credentials Section */}
       <div className="space-y-4">
         <div className="space-y-2">
           <Label htmlFor="replicateUsername">Replicate Username</Label>
@@ -73,6 +78,7 @@ export function TrainingSettings({ onSettingsChange, settings: initialSettings }
           />
         </div>
 
+        {/* Secure input for Replicate API key */}
         <div className="space-y-2">
           <Label htmlFor="replicateApiKey">Replicate API Key</Label>
           <div className="relative">
@@ -98,6 +104,7 @@ export function TrainingSettings({ onSettingsChange, settings: initialSettings }
           </div>
         </div>
 
+        {/* xAI API Configuration */}
         <div className="space-y-2">
           <div className="flex items-center space-x-2">
             <Label htmlFor="xaiApiKey">xAI API Key</Label>
@@ -135,6 +142,7 @@ export function TrainingSettings({ onSettingsChange, settings: initialSettings }
           </div>
         </div>
 
+        {/* Basic Training Parameters */}
         <div className="flex items-center justify-between">
           <Label htmlFor="autoCaptioning">Auto Captioning</Label>
           <Switch
@@ -155,6 +163,7 @@ export function TrainingSettings({ onSettingsChange, settings: initialSettings }
           />
         </div>
 
+        {/* Advanced Settings Toggle */}
         <Button
           variant="outline"
           className="w-full"
@@ -173,6 +182,7 @@ export function TrainingSettings({ onSettingsChange, settings: initialSettings }
           )}
         </Button>
 
+        {/* Advanced Training Parameters */}
         {showAdvanced && (
           <Card className="p-4 space-y-4">
             <div className="space-y-2">

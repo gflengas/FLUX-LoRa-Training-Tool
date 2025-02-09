@@ -8,7 +8,10 @@ import { ModelInfo, TrainingSettings as Settings } from '@/types';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Brain, Settings2 } from 'lucide-react';
 
+// Main page component for the LoRA model training interface
 export default function Home() {
+  // Global state for model information and training settings
+  // These states are passed down to child components and updated via callbacks
   const [modelInfo, setModelInfo] = useState<Partial<ModelInfo>>({});
   const [trainingSettings, setTrainingSettings] = useState<Partial<Settings>>({});
 
@@ -22,6 +25,7 @@ export default function Home() {
           </p>
         </div>
         
+        {/* Tab interface for separating model info and training settings */}
         <Tabs defaultValue="info" className="space-y-6">
           <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="info" className="space-x-2">
