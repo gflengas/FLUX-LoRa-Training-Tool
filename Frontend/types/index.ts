@@ -50,8 +50,9 @@ export interface ModelInfo {
 }
 
 export interface TrainingStatus {
-  status: 'idle' | 'training' | 'completed' | 'failed';
-  replicateUrl?: string;
-  modelDestination?: string;
+  status: 'idle' | 'training' | 'failed';
   error?: string;
+  replicateUrl?: string;
+  trainingId?: string;
+  modelUrl?: string;
 }

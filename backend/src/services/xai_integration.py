@@ -19,7 +19,7 @@ def encode_image(image_path):
     with open(image_path, "rb") as image_file:
         return base64.b64encode(image_file.read()).decode('utf-8')
   
-def generate_description(image_path, token, type, infos):
+def generate_description(image_path, token, type, infos, API_KEY):
     """
     Generates a physical description of a person from an input image using 
     X.AI API through the openAI SDK.
@@ -33,27 +33,29 @@ def generate_description(image_path, token, type, infos):
         token (str): Token to include in the description (e.g., "a person").
         type (str): Determines which prompt to use ("human", "pet", or "item").
         infos (str): Additional informations about the subject of the images.
+        API_KEY (str): The API key to use for the X.AI API (if different from the default).
 
     Returns:
         str: A cleaned string containing the generated description with all tabs 
             and newlines removed.
     """
     base64_image = encode_image(image_path)
+    
+    api_key = API_KEY if API_KEY else XAI_API_KEY
     client = OpenAI(
-        api_key=XAI_API_KEY,
+        
+        api_key=api_key,
         base_url="https://api.x.ai/v1",
     )
 
     # Define the prompts for different types
     if type == "human":
-        prompt = """Provide a brief, objective description of the\
-                    person in this image, focusing on:\
+        prompt = """Provide a brief, objective description of the person in this image, focusing on:\
                     1. Face: shape, distinctive features, expression\
                     2. Body type/build\
                     3. Overall visual style/physique\
-                    Describe only clear, observable physical\
-                    attributes relevant for image generation. Start\
-                    the description with: "A photo of {token}. {infos}"""
+                    Describe only clear, observable physical attributes relevant for image generation.\
+                    Start the description with: "A photo of {token}, {infos}" """
         
     elif type == "pet":
         prompt = """Provide a brief, objective description of the\
@@ -64,7 +66,7 @@ def generate_description(image_path, token, type, infos):
                     4. Expression or demeanor (if observable)\
                     Describe only clear, observable physical\
                     attributes relevant for image generation. Start\
-                    the description with: "A photo of {token}. {infos}"""
+                    the description with: "A photo of {token}, {infos}" """
         
     elif type == "item":
         prompt = """Provide a brief, objective description of the\
@@ -74,12 +76,12 @@ def generate_description(image_path, token, type, infos):
                     3. Color and any distinctive features\
                     Describe only clear, observable physical\
                     attributes relevant for image generation. Start\
-                    the description with: "A photo of {token}. {infos}"""
+                    the description with: "A photo of {token}, a {infos}" """
     else:
         raise ValueError("Invalid type. Choose 'human', 'pet', or 'item'.")
 
     # Format the prompt with the token
-    formatted_prompt = prompt.format(token=token)
+    formatted_prompt = prompt.format(token=token, infos=infos)
 
     messages = [
         {
