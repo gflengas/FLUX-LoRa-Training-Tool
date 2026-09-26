@@ -1,4 +1,3 @@
-import os
 import base64
 from openai import OpenAI
 from src.config import XAI_API_KEY

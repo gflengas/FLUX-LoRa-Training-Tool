@@ -66,21 +66,3 @@ def delete_temp_folder(folder_path):
             print(f"Error while deleting folder {folder_path}: {e}")
     else:
         print(f"Folder does not exist: {folder_path}")
-
-def delete_file(file_path):
-    """Deletes a single file if it exists.
-
-    Args:
-        file_path (str): Path to the file that needs to be deleted.
-
-    Returns:
-        None: Prints status message indicating success or failure.
-    """
-    if os.path.exists(file_path):
-        try:
-            os.remove(file_path)
-            print(f"Successfully deleted the file: {file_path}")
-        except Exception as e:
-            print(f"Error while deleting file {file_path}: {e}")
-    else:
-        print(f"File does not exist: {file_path}")

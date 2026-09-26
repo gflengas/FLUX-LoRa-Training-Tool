@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import Dict, Any, List, Optional
+from typing import Optional
 
 class ModelInfo(BaseModel):
     name: str
@@ -31,3 +31,4 @@ class TrainingResponse(BaseModel):
     status: str
     trainingId: str
     modelUrl: Optional[str]
+    trainingUrl: Optional[str] = None

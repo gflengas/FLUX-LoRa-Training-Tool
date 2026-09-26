@@ -7,6 +7,10 @@ import os
 
 api = Blueprint('api', __name__)
 
+@api.route('/health', methods=['GET'])
+def health():
+    return jsonify(status='ok')
+
 @api.route('/upload', methods=['POST'])
 def upload_file():
     try:

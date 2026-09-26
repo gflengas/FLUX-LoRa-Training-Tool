@@ -1,150 +1,119 @@
-# FLUX LoRa Training Tool
+# LoRA Studio
 
-![FLUX LoRa Training Tool Interface](docs/images/lora-trainer-interface.png)
+A Vue 3 + TypeScript frontend for image inference, model selection, and LoRA
+training, with a Flask API. The UI uses native HTML controls, plain CSS, Lucide
+icons, and locally served Inter fonts. A small ZIP utility (`fflate`) packages
+generated images for transfer to the training form.
 
-## Overview
+## Current status
 
-FLUX LoRa Training Tool is a powerful web application designed to simplify the process of training and fine-tuning LoRA (Low-Rank Adaptation) models for Flux. 
-This tool makes it easy for artists, designers, and AI enthusiasts to create 
-custom AI models trained on their own image datasets, enabling personalized 
-image generation capabilities.
+- **Inference:** generation controls, output gallery, download, seed reuse, and
+  transfer to training. Local inference requires the new backend endpoints.
+- **Model Settings:** model/LoRA selection and refresh, ready for backend model
+  discovery. The UI shows an unavailable state while discovery is unimplemented.
+- **Training:** model details, ZIP upload, and the original training settings.
+  The existing backend submits FLUX.1 dev training to Replicate and optionally
+  uses xAI for captions. Local GPU training is not implemented yet.
 
-The tool leverages the XAI API to automatically generate detailed image descriptions by combining user-provided characteristics with image analysis, enhancing the quality of model training. All model training is performed securely through Replicate's API infrastructure. For user privacy and security, no API keys are stored or shared in any way - they are only used during the active training session.
+## Run locally without Docker
 
-## 🐳 Docker Setup (Recommended)
+Requirements: Node.js 22.12+ (or another version supported by Vite), npm, and
+Python 3.11. The Python dependencies are pinned for the existing cloud trainer.
 
-The easiest way to run this application is using Docker. This method ensures consistent behavior across different environments.
+From the repository root:
 
-### Prerequisites
-- [Docker](https://docs.docker.com/get-docker/)
-- [Docker Compose](https://docs.docker.com/compose/install/)
+```bash
+python3.11 -m venv backend/.venv
+backend/.venv/bin/python -m pip install -r backend/requirements.txt
+cd Frontend
+npm ci
+cp .env.example .env.local
+```
 
-### Installation Steps
+Alternatively, provision Python with `uv venv --python 3.11 backend/.venv`, then
+install packages with `uv pip install --python backend/.venv/bin/python -r
+backend/requirements.txt` from the repository root.
 
-1. **Install Docker and Docker Compose**
-   ```bash
-   # For Ubuntu/Debian
-   sudo apt update
-   sudo apt install docker.io docker-compose
-   
-   # Add your user to docker group (requires logout/login to take effect)
-   sudo usermod -aG docker $USER
-   ```
+Start the backend in one terminal:
 
-2. **Clone the Repository**
-   ```bash
-   git clone [your-repository-url]
-   cd FLUX-LoRa-Training-Tool
-   ```
+```bash
+cd backend
+.venv/bin/python -m flask --app app run --host 127.0.0.1 --port 5000
+```
 
-3. **Start the Application**
-   ```bash
-   docker-compose up --build
-   ```
+Start the frontend in another terminal:
 
-   The application will be available at:
-   - Frontend: http://localhost:3000
-   - Backend API: http://localhost:5000
+```bash
+cd Frontend
+npm run dev
+```
 
-4. **Stop the Application**
-   ```bash
-   # Press Ctrl+C or run:
-   docker-compose down
-   ```
+Open <http://127.0.0.1:3000>. Backend health is available at
+<http://127.0.0.1:5000/api/health>. Keep both terminals running; Ctrl+C stops
+each service.
 
+Vite forwards `/api` requests to `http://127.0.0.1:5000`. To change that target,
+set `API_PROXY_TARGET` in `Frontend/.env.local`. Use `VITE_API_URL` only when
+calling a separate API origin. Restart Vite after changing environment variables.
 
-## Why Use FLUX LoRa Training Tool?
+## Training with the existing backend
 
-- 🚀 **User-Friendly Interface**: Simple and intuitive web interface for training LoRA models without command-line complexity
-- 🎨 **Custom Model Creation**: Train models on your specific art style, character, or concept
-- 📊 **Real-time Monitoring**: Track training progress and model performance in real-time
-- 🔄 **Efficient Workflow**: Streamlined process from image upload to model training
-- 💾 **Easy Export**: Download and use your trained models even at your own 
-personal computer.
+1. Open **Training** and enter a model name and subject characteristics.
+2. Read the image guidelines and choose a ZIP dataset. A flat ZIP of JPG images
+   is the currently smoke-tested format.
+3. Review captioning, steps, and advanced settings. Expand **Training service
+   connection** to enter Replicate credentials and, if needed, an xAI API key.
+4. Start training and follow the returned Replicate progress link.
 
-## Technologies Used
+This sends data to external providers and can incur charges. Credentials are
+kept in application memory rather than browser storage; only the theme is
+saved in local storage. Optional xAI fallback configuration can be placed in
+an untracked repository-root `.env` file as `XAI_API_KEY`.
 
-### Frontend
-- **Next.js 13**: React framework with server-side rendering
-- **TypeScript**: For type-safe code
-- **Tailwind CSS**: For responsive and modern UI design
-- **Radix UI**: For accessible component primitives
-- **React Hook Form**: For form handling and validation
+## Development
 
-### Backend
-- **Flask**: Python web framework for the API
-- **Flask-CORS**: For handling cross-origin requests
-- **XAI**: For generating captions for the images
-- **Replicate**: For model training and inference
-- **Python**: Core backend language
+```bash
+cd Frontend
+npm run typecheck
+npm run build
+npm run format
+```
 
-## Getting Started
+The build writes static files to `Frontend/dist`. `npm run preview` serves the
+build on port 3000 with the same API proxy; stop the dev server first. Deployment
+needs a static file server and an `/api` proxy to Flask.
 
-### Prerequisites
-- Node.js (v16 or higher)
-- Python 3.10 or higher
-- pip (Python package manager)
+- `Frontend/src/App.vue`: page navigation and shared state.
+- `Frontend/src/components/`: feature components using typed Vue bindings.
+- `Frontend/src/composables/useModels.ts`: model discovery and selection.
+- `Frontend/src/api.ts`: backend requests.
+- `Frontend/src/style.css`: shared colors, controls, and responsive layouts.
+- `backend/src/api/`: Flask routes and request/response schemas.
 
+No router, global state library, UI component kit, CSS framework, or HTTP client
+library is required. The retired React/Next.js frontend and legacy CLI have
+been removed.
 
+## Optional Docker setup
 
-### Running the Application
+With Docker and Compose already installed:
 
-1. **Start the Backend**
-   ```bash
-   cd backend
-   python app.py
-   ```
+```bash
+docker compose up --build
+```
 
-2. **Start the Frontend**
-   ```bash
-   cd Frontend
-   npm run dev
-   ```
+The frontend is available at <http://localhost:3000>. Stop with
+`docker compose down`. Native frontend/backend processes are the verified
+local development setup; the Docker configuration is retained as an alternative.
 
-3. Access the application at `http://localhost:3000`
+## Verification scope
 
-## Usage Guide
-
-1. **Configure Training Settings**
-   - Set your model name
-   - Set your model type and characteristics
-   - Adjust training parameters (epochs, learning rate, etc.)
-   - Insert your API keys
-  
-
-2. **Upload Images**
-   - View the image guidelines and accept them
-   - Click on the upload button
-   - Select or drag-and-drop your training images zip file
-
-3. **Start Training**
-   - Review your settings
-   - Click "Start Training"
-   - Monitor the training progress through the replicate website link
-
-4. **Export and Use**
-   - Once training is complete, you can run your model in Replicate or
-   download your model
-
-<!-- ## Example Results
-
-[Insert Collage of Example Generated Images Here] -->
-
+The frontend build checks Vue and TypeScript. Browser smoke tests used a local
+test API to exercise model selection, inference error/retry, gallery actions,
+ZIP transfer, and training submission. Backend smoke tests mocked external
+services. These checks do not verify current Replicate trainer/xAI availability
+or execute real GPU training/inference.
 
 ## License
 
-This project is licensed under the Apache License 2.0 - see the [LICENSE.md](LICENSE.md) file for details.
-
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-
+[Apache License 2.0](LICENSE.md).
