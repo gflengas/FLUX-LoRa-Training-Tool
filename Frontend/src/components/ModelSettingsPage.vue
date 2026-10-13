@@ -42,7 +42,7 @@ defineEmits<{ use: [] }>();
         />
         <span>
           <strong>{{ model.name }}</strong>
-          <small>Base model</small>
+          <small>{{ model.family || 'Base model' }}</small>
         </span>
       </label>
     </section>

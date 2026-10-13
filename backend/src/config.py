@@ -7,3 +7,6 @@ load_dotenv(Path(__file__).resolve().parents[2] / '.env')
 
 # Configuration settings
 XAI_API_KEY = os.getenv("XAI_API_KEY")
+COMFYUI_URL = os.getenv("COMFYUI_URL", "http://127.0.0.1:8188").rstrip("/")
+MODELS_DIR = Path(os.getenv("MODELS_DIR", Path(__file__).resolve().parents[2] / "models"))
+INFERENCE_OUTPUT = Path(__file__).resolve().parents[2] / "outputs" / "inference"

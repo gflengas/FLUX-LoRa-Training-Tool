@@ -32,6 +32,15 @@ const page = computed(() => pages.find((page) => page.id === activeTab.value)!);
 const model = ref<ModelInfo>({ name: '', type: 'human', characteristics: {} });
 const settings = ref(defaultSettings());
 const library = useModels();
+const connectionDialog = ref<HTMLDialogElement>();
+watch(library.connectionError, (message) => {
+  if (message && !connectionDialog.value?.open)
+    connectionDialog.value?.showModal();
+  if (!message) connectionDialog.value?.close();
+});
+function dismissConnectionError() {
+  library.connectionError.value = '';
+}
 const notice = ref('');
 const suggestedDataset = ref<File>();
 function receiveDataset(dataset: File) {
@@ -163,6 +172,41 @@ function moveTab(event: KeyboardEvent) {
       />
     </section>
   </main>
+  <dialog
+    ref="connectionDialog"
+    aria-labelledby="connection-title"
+    aria-describedby="connection-description"
+    @cancel.prevent="dismissConnectionError"
+    @close="dismissConnectionError"
+  >
+    <div class="dialog-content stack-large">
+      <button
+        class="icon-button dialog-close"
+        aria-label="Close connection warning"
+        @click="dismissConnectionError"
+      >
+        <X />
+      </button>
+      <h2 id="connection-title">ComfyUI is unreachable</h2>
+      <p id="connection-description" class="muted">
+        The app cannot connect to the inference Docker container. Start it, wait
+        for it to finish loading, then try again.
+      </p>
+      <p role="status">{{ library.connectionError.value }}</p>
+      <div class="inline">
+        <button class="button outline" @click="dismissConnectionError">
+          Dismiss
+        </button>
+        <button
+          class="button primary"
+          :disabled="library.loading.value"
+          @click="library.refresh"
+        >
+          {{ library.loading.value ? 'Checking…' : 'Try Again' }}
+        </button>
+      </div>
+    </div>
+  </dialog>
   <aside v-if="notice" class="toast card" role="status">
     <span>{{ notice }}</span>
     <button

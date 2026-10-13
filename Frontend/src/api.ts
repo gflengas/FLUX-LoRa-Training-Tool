@@ -1,12 +1,31 @@
-import type { ModelInfo, TrainingSettings, TrainingResult } from './types';
+import type {
+  ModelInfo,
+  TrainingSettings,
+  TrainingResult,
+  ModelCatalog,
+  GenerationSettings,
+  GenerationResult,
+} from './types';
 
 const apiUrl = (import.meta.env.VITE_API_URL || '/api').replace(/\/$/, '');
+
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    public status: number,
+  ) {
+    super(message);
+  }
+}
 
 async function request<T>(path: string, options: RequestInit): Promise<T> {
   const response = await fetch(`${apiUrl}${path}`, options);
   const data = await response.json().catch(() => null);
   if (!response.ok)
-    throw new Error(data?.message || `Request failed (${response.status})`);
+    throw new ApiError(
+      data?.message || `Request failed (${response.status})`,
+      response.status,
+    );
   if (!data) throw new Error('The server returned an empty response.');
   return data as T;
 }
@@ -40,16 +59,35 @@ export async function startTraining(
 }
 
 export async function fetchModels() {
-  return request<import('./types').ModelCatalog>('/models', { method: 'GET' });
+  return request<ModelCatalog>('/models', { method: 'GET' });
 }
 export async function generateImages(
   modelId: string,
   loraId: string,
-  settings: import('./types').GenerationSettings,
+  settings: GenerationSettings,
+  onStatus?: (status: string) => void,
 ) {
-  return request<import('./types').GenerationResult>('/inference', {
+  const job = await request<{ jobId: string; status: string }>('/inference', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ modelId, loraId: loraId || null, ...settings }),
   });
+  onStatus?.('Queued');
+  const deadline = Date.now() + 30 * 60 * 1000;
+  while (Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+    const result = await request<
+      GenerationResult & {
+        status: string;
+        message?: string;
+      }
+    >(`/inference/${job.jobId}`, { method: 'GET' });
+    if (result.status === 'completed') return result;
+    if (result.status === 'failed')
+      throw new Error(result.message || 'Generation failed.');
+    onStatus?.(result.status === 'queued' ? 'Queued' : 'Generating');
+  }
+  throw new Error(
+    'Stopped waiting after 30 minutes. The job may still be running in ComfyUI.',
+  );
 }

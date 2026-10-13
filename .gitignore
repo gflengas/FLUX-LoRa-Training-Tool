@@ -24,6 +24,7 @@ build/
 *.tsbuildinfo
 
 # Runtime data
+.runtime/
 backend/uploads/
 backend/temp/
 models/

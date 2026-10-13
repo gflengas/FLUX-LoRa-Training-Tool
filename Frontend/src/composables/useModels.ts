@@ -1,5 +1,5 @@
 import { computed, ref, watch } from 'vue';
-import { fetchModels } from '../api';
+import { ApiError, fetchModels } from '../api';
 import type { ModelCatalog } from '../types';
 
 export function useModels() {
@@ -12,6 +12,13 @@ export function useModels() {
   const loraId = ref('');
   const loading = ref(false);
   const error = ref('');
+  const connectionError = ref('');
+  function reportConnectionError(cause: unknown) {
+    if (cause instanceof ApiError && cause.status === 503) {
+      connectionError.value = cause.message;
+      catalog.value.inferenceAvailable = false;
+    }
+  }
   const compatibleLoras = computed(() =>
     catalog.value.loras.filter((lora) => lora.baseModelId === modelId.value),
   );
@@ -27,20 +34,34 @@ export function useModels() {
       if (!Array.isArray(data.models) || !Array.isArray(data.loras))
         throw new Error('Invalid model catalog');
       catalog.value = data;
+      connectionError.value = '';
       if (!data.models.some((model) => model.id === modelId.value))
         modelId.value = data.models[0]?.id || '';
       if (!compatibleLoras.value.some((lora) => lora.id === loraId.value))
         loraId.value = '';
-    } catch {
+    } catch (cause) {
       catalog.value = { models: [], loras: [], inferenceAvailable: false };
       modelId.value = '';
       loraId.value = '';
       error.value =
-        'Local model discovery is not available. Connect the model backend, then refresh.';
+        cause instanceof Error
+          ? cause.message
+          : 'Could not discover local models.';
+      return cause;
     } finally {
       loading.value = false;
     }
   }
-  return { catalog, modelId, loraId, compatibleLoras, loading, error, refresh };
+  return {
+    catalog,
+    modelId,
+    loraId,
+    compatibleLoras,
+    loading,
+    error,
+    connectionError,
+    reportConnectionError,
+    refresh,
+  };
 }
 export type ModelLibrary = ReturnType<typeof useModels>;

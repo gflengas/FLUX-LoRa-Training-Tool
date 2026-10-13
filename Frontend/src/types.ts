@@ -46,6 +46,11 @@ export interface TrainingResult {
 export interface LocalModel {
   id: string;
   name: string;
+  family?: string;
+  defaults?: { steps: number; guidance: number };
+  fixedSteps?: boolean;
+  fixedGuidance?: boolean;
+  negativePrompt?: boolean;
 }
 export interface LocalLora extends LocalModel {
   baseModelId: string;

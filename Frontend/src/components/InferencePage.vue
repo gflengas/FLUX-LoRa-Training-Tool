@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import {
   Image,
   Play,
@@ -31,8 +31,22 @@ const settings = ref<GenerationSettings>({
   seed: null,
   guidance: 7,
 });
+const selectedModel = computed(() =>
+  catalog.value.models.find((model) => model.id === modelId.value),
+);
+watch(
+  modelId,
+  () => {
+    const model = selectedModel.value;
+    settings.value.steps = model?.defaults?.steps ?? 30;
+    settings.value.guidance = model?.defaults?.guidance ?? 7;
+    if (model?.negativePrompt === false) settings.value.negativePrompt = '';
+  },
+  { immediate: true },
+);
 const size = ref('1024x1024');
 const busy = ref(false);
+const generationStatus = ref('Generating');
 const sending = ref(false);
 const error = ref('');
 const output = ref<GeneratedImage[]>([]);
@@ -48,11 +62,16 @@ function imageUrl(value: string) {
   return url.href;
 }
 async function generate() {
-  if (busy.value || !canGenerate.value) return;
+  if (busy.value || loading.value) return;
   if (!settings.value.prompt.trim()) return;
   busy.value = true;
   error.value = '';
   try {
+    // Check the engine on Generate, including when discovery previously failed.
+    const discoveryError = await library.refresh();
+    if (discoveryError) throw discoveryError;
+    if (!canGenerate.value)
+      throw new Error('No supported model is available. Check Model Settings.');
     const [width, height] = size.value.split('x').map(Number);
     const request = {
       ...settings.value,
@@ -63,7 +82,14 @@ async function generate() {
           ? null
           : Number(settings.value.seed),
     };
-    const result = await generateImages(modelId.value, loraId.value, request);
+    const result = await generateImages(
+      modelId.value,
+      loraId.value,
+      request,
+      (status) => {
+        generationStatus.value = status;
+      },
+    );
     if (!result.images?.length)
       throw new Error('The backend returned no images.');
     output.value = result.images.map((image) => ({
@@ -72,8 +98,10 @@ async function generate() {
     }));
     index.value = 0;
   } catch (cause) {
-    error.value =
-      cause instanceof Error
+    library.reportConnectionError(cause);
+    error.value = library.connectionError.value
+      ? ''
+      : cause instanceof Error
         ? cause.message
         : 'Generation failed. Please retry.';
   } finally {
@@ -173,6 +201,7 @@ async function sendToTraining() {
             <label for="negative-prompt" class="sr-only">Negative prompt</label>
             <textarea
               id="negative-prompt"
+              :disabled="selectedModel?.negativePrompt === false"
               v-model="settings.negativePrompt"
               rows="3"
               placeholder="What should the image avoid?"
@@ -204,6 +233,7 @@ async function sendToTraining() {
             <label for="inference-steps">Steps</label>
             <input
               id="inference-steps"
+              :disabled="selectedModel?.fixedSteps"
               v-model.number="settings.steps"
               type="number"
               min="1"
@@ -229,6 +259,7 @@ async function sendToTraining() {
             <label for="guidance">Guidance scale</label>
             <input
               id="guidance"
+              :disabled="selectedModel?.fixedGuidance"
               v-model.number="settings.guidance"
               type="number"
               min="0"
@@ -240,11 +271,11 @@ async function sendToTraining() {
         </details>
         <button
           class="button primary full"
-          :disabled="!canGenerate || busy || !settings.prompt.trim()"
+          :disabled="loading || busy || !settings.prompt.trim()"
         >
           <Loader2 v-if="busy" class="spin" />
           <Play v-else />
-          {{ busy ? 'Generating…' : 'Generate Image' }}
+          {{ busy ? `${generationStatus}…` : 'Generate Image' }}
         </button>
       </fieldset>
       <div v-if="!canGenerate" class="notice">
@@ -268,7 +299,7 @@ async function sendToTraining() {
     >
       <div class="spread">
         <h2>Output</h2>
-        <span v-if="busy" class="badge">Generating</span>
+        <span v-if="busy" class="badge">{{ generationStatus }}</span>
         <span v-else-if="current" class="badge inline">
           <Check />
           Completed
