@@ -1,14 +1,19 @@
 from flask import Blueprint, request, jsonify, send_from_directory, current_app
-from .schemas import TrainingRequest, TrainingResponse, InferenceRequest, InferenceResponse
+from .schemas import TrainingRequest, TrainingResponse, LocalTrainingRequest, InferenceRequest, InferenceResponse
 from pydantic import ValidationError
 import httpx
 import re
 from src.services.comfy_integration import get_models, start_inference, get_inference_status
 from src.config import INFERENCE_OUTPUT
+from src.services.ai_toolkit_integration import (
+    train_LoRa_locally, get_training_status, cancel_training,
+    TrainingUnavailable, TrainingBusy,
+)
 import src.services.file_processing as fp
 from src.services.replicate_integration import train_LoRa_with_api
 from src.services.xai_integration import generate_description
 import os
+from pathlib import Path
 
 api = Blueprint('api', __name__)
 
@@ -107,11 +112,41 @@ def upload_file():
             "message": str(e)
         }), 500
 
+@api.route('/training/folders', methods=['GET'])
+def training_folders():
+    # Browse directories on the same PC as the backend; no image upload needed.
+    try:
+        folder = Path(request.args.get("path") or Path.home()).expanduser()
+        if not folder.is_absolute():
+            return jsonify(status="error", message="Enter an absolute folder path."), 400
+        folder = folder.resolve(strict=True)
+        if not folder.is_dir():
+            return jsonify(status="error", message="Select a folder, not a file."), 400
+        folders = []
+        for entry in folder.iterdir():
+            if not entry.name.startswith(".") and not entry.is_symlink() and entry.is_dir():
+                folders.append({"name": entry.name, "path": str(entry)})
+                if len(folders) > 1000:
+                    return jsonify(status="error", message="Too many folders to browse. Enter a more specific path."), 400
+        return jsonify(path=str(folder), parent=str(folder.parent) if folder != folder.parent else None,
+                       folders=sorted(folders, key=lambda entry: entry["name"].casefold()))
+    except FileNotFoundError:
+        return jsonify(status="error", message="Folder not found."), 404
+    except (OSError, RuntimeError, ValueError):
+        return jsonify(status="error", message="Cannot read this folder. Check its path and permissions."), 400
+
+
 @api.route('/training/start', methods=['POST'])
 def start_training():
     try:
+        body = request.get_json(silent=True)
+        if isinstance(body, dict) and body.get("engine") == "local":
+            req_data = LocalTrainingRequest.model_validate(body)
+            return jsonify(train_LoRa_locally(req_data)), 202
+        if isinstance(body, dict) and body.get("engine", "replicate") != "replicate":
+            return jsonify(status="error", message="Unknown training engine."), 400
         # Validate request
-        req_data = TrainingRequest(**request.json)
+        req_data = TrainingRequest.model_validate(body)
 
         # prepare the data
         temp_folder = "./temp"
@@ -157,8 +192,42 @@ def start_training():
         )
         
         return jsonify(response.model_dump())
+    except ValidationError as e:
+        return jsonify(status="error", message=e.errors()[0]["msg"]), 400
+    except TrainingBusy as e:
+        return jsonify(status="error", message=str(e)), 409
+    except TrainingUnavailable as e:
+        return jsonify(status="error", message=str(e)), 503
+    except ValueError as e:
+        return jsonify(status="error", message=str(e)), 400
     except Exception as e:
         return jsonify({
             "status": "error",
             "message": str(e)
         }), 500
+
+
+@api.route('/training/<uuid:job_id>', methods=['GET'])
+def training_status(job_id):
+    try:
+        return jsonify(get_training_status(str(job_id)))
+    except FileNotFoundError:
+        return jsonify(status="error", message="Training job not found."), 404
+    except TrainingUnavailable as e:
+        return jsonify(status="error", message=str(e)), 503
+    except Exception:
+        current_app.logger.exception("Could not read training status")
+        return jsonify(status="error", message="Could not read training status. Check the backend logs."), 502
+
+
+@api.route('/training/<uuid:job_id>/cancel', methods=['POST'])
+def stop_training(job_id):
+    try:
+        return jsonify(cancel_training(str(job_id)))
+    except FileNotFoundError:
+        return jsonify(status="error", message="Training job not found."), 404
+    except TrainingUnavailable as e:
+        return jsonify(status="error", message=str(e)), 503
+    except Exception:
+        current_app.logger.exception("Could not cancel training")
+        return jsonify(status="error", message="Could not cancel training. Check the backend logs."), 502

@@ -762,3 +762,24 @@ a.button {
   color: inherit;
   text-decoration: none;
 }
+
+.folder-list {
+  max-height: 280px;
+  overflow-y: auto;
+}
+.folder-list .button {
+  justify-content: flex-start;
+  overflow-wrap: anywhere;
+  text-align: left;
+}
+.local-path {
+  overflow-wrap: anywhere;
+}
+.training-logs {
+  max-height: 320px;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 12px;
+  line-height: 1.6;
+}

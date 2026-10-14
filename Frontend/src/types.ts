@@ -5,42 +5,49 @@ export interface ModelInfo {
   characteristics: Record<string, string | number>;
 }
 export interface TrainingSettings {
-  replicateUsername: string;
-  replicateApiKey: string;
-  xaiApiKey: string;
   autoCaptioning: boolean;
   steps: number;
   loraRank: number;
-  hfRepoId: string;
-  hfToken: string;
   learningRate: number;
   batchSize: number;
   resolution: string;
   captionDropoutRate: number;
-  optimizer: string;
+  optimizer: 'adamw8bit' | 'adamw';
+  saveEvery: number;
+  seed: number;
 }
 export function defaultSettings(): TrainingSettings {
   return {
-    replicateUsername: '',
-    replicateApiKey: '',
-    xaiApiKey: '',
     autoCaptioning: false,
     steps: 1000,
     loraRank: 16,
-    hfRepoId: '',
-    hfToken: '',
-    learningRate: 0.0004,
+    learningRate: 0.0001,
     batchSize: 1,
-    resolution: '512,768,1024',
+    resolution: '512',
     captionDropoutRate: 0.05,
     optimizer: 'adamw8bit',
+    saveEvery: 250,
+    seed: 42,
   };
 }
 export interface TrainingResult {
-  status: string;
+  status: 'starting' | 'running' | 'completed' | 'failed' | 'cancelled';
   trainingId: string;
-  modelUrl?: string;
-  trainingUrl?: string;
+  name: string;
+  modelType?: ModelType;
+  settings?: TrainingSettings;
+  imageCount: number;
+  steps: number;
+  datasetPath: string;
+  outputPath: string;
+  loraPath?: string;
+  logs?: string;
+  message?: string;
+}
+export interface DatasetFolders {
+  path: string;
+  parent: string | null;
+  folders: { name: string; path: string }[];
 }
 
 export interface LocalModel {

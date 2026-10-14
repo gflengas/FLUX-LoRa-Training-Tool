@@ -16,7 +16,7 @@ import { generateImages } from '../api';
 const { library } = defineProps<{ library: ModelLibrary }>();
 const emit = defineEmits<{
   models: [];
-  train: [dataset: File];
+  train: [];
   notice: [message: string];
 }>();
 const { catalog, modelId, loraId, compatibleLoras, loading } = library;
@@ -47,7 +47,6 @@ watch(
 const size = ref('1024x1024');
 const busy = ref(false);
 const generationStatus = ref('Generating');
-const sending = ref(false);
 const error = ref('');
 const output = ref<GeneratedImage[]>([]);
 const index = ref(0);
@@ -106,32 +105,6 @@ async function generate() {
         : 'Generation failed. Please retry.';
   } finally {
     busy.value = false;
-  }
-}
-async function sendToTraining() {
-  if (!current.value || sending.value) return;
-  sending.value = true;
-  try {
-    const response = await fetch(current.value.url);
-    if (!response.ok) throw new Error('Download failed');
-    const blob = await response.blob();
-    const extension = blob.type === 'image/jpeg' ? 'jpg' : 'png';
-    const { zipSync } = await import('fflate');
-    const archive = zipSync({
-      [`generated-${current.value.seed}.${extension}`]: new Uint8Array(
-        await blob.arrayBuffer(),
-      ),
-    });
-    emit(
-      'train',
-      new File([new Uint8Array(archive).buffer], 'generated-portrait.zip', {
-        type: 'application/zip',
-      }),
-    );
-  } catch {
-    emit('notice', 'Could not prepare the training image. Please retry.');
-  } finally {
-    sending.value = false;
   }
 }
 </script>
@@ -358,13 +331,9 @@ async function sendToTraining() {
             <RotateCcw />
             Reuse Seed
           </button>
-          <button
-            class="button outline"
-            :disabled="sending"
-            @click="sendToTraining"
-          >
+          <button class="button outline" @click="emit('train')">
             <GraduationCap />
-            {{ sending ? 'Preparing…' : 'Send to Training' }}
+            Open Training
           </button>
         </div>
         <p class="muted">

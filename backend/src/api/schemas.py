@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field, ConfigDict, field_validator
-from typing import Optional
+from typing import Literal, Optional
 
 class ModelInfo(BaseModel):
     name: str
@@ -32,6 +32,44 @@ class TrainingResponse(BaseModel):
     trainingId: str
     modelUrl: Optional[str]
     trainingUrl: Optional[str] = None
+
+
+class LocalTrainingSettings(BaseModel):
+    model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
+    steps: int = Field(default=1000, ge=1, le=10000, strict=True)
+    loraRank: int = Field(default=16, ge=4, le=128, strict=True)
+    learningRate: float = Field(default=1e-4, gt=0, le=1e-3)
+    batchSize: int = Field(default=1, ge=1, le=4, strict=True)
+    resolution: str = "512"
+    optimizer: Literal["adamw8bit", "adamw"] = "adamw8bit"
+    captionDropoutRate: float = Field(default=0.05, ge=0, le=0.5)
+    autoCaptioning: Literal[False] = False
+    saveEvery: int = Field(default=250, ge=1, le=1000, strict=True)
+    seed: int = Field(default=42, ge=0, le=4294967295, strict=True)
+
+    @field_validator("resolution")
+    @classmethod
+    def validate_resolutions(cls, value):
+        parts = value.split(",")
+        if not 1 <= len(parts) <= 3 or any(p.strip() not in {"512", "768", "1024"} for p in parts):
+            raise ValueError("Resolution must contain 512, 768 or 1024, separated by commas")
+        return ",".join(dict.fromkeys(p.strip() for p in parts))
+
+
+class LocalModelInfo(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    name: str = Field(min_length=1, max_length=64, pattern=r"^[a-zA-Z0-9][a-zA-Z0-9_-]*$")
+    type: Literal["human", "item", "pet"] = "human"
+    characteristics: str = Field(default="", max_length=2000)
+
+
+class LocalTrainingRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    engine: Literal["local"]
+    modelId: Literal["z-image-turbo"] = "z-image-turbo"
+    modelInfo: LocalModelInfo
+    settings: LocalTrainingSettings = Field(default_factory=LocalTrainingSettings)
+    datasetPath: str = Field(min_length=1, max_length=4096)
 
 
 class InferenceRequest(BaseModel):

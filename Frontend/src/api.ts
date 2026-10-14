@@ -1,4 +1,5 @@
 import type {
+  DatasetFolders,
   ModelInfo,
   TrainingSettings,
   TrainingResult,
@@ -31,20 +32,16 @@ async function request<T>(path: string, options: RequestInit): Promise<T> {
 }
 
 export async function startTraining(
-  file: File,
+  datasetPath: string,
   model: ModelInfo,
   settings: TrainingSettings,
 ) {
-  const form = new FormData();
-  form.append('file', file);
-  const upload = await request<{ filePath: string }>('/upload', {
-    method: 'POST',
-    body: form,
-  });
   return request<TrainingResult>('/training/start', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
+      engine: 'local',
+      modelId: 'z-image-turbo',
       modelInfo: {
         ...model,
         characteristics: Object.entries(model.characteristics)
@@ -53,9 +50,27 @@ export async function startTraining(
           .join(', '),
       },
       settings,
-      imageLocation: upload.filePath,
+      datasetPath,
     }),
   });
+}
+
+export function fetchTraining(id: string) {
+  return request<TrainingResult>(`/training/${encodeURIComponent(id)}`, {
+    method: 'GET',
+    signal: AbortSignal.timeout(15000),
+  });
+}
+export function cancelTraining(id: string) {
+  return request<TrainingResult>(`/training/${encodeURIComponent(id)}/cancel`, {
+    method: 'POST',
+  });
+}
+export function fetchDatasetFolders(path = '') {
+  return request<DatasetFolders>(
+    `/training/folders?path=${encodeURIComponent(path)}`,
+    { method: 'GET', signal: AbortSignal.timeout(15000) },
+  );
 }
 
 export async function fetchModels() {

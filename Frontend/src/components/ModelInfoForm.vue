@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { ref } from 'vue';
-import { Image, Upload, Play, Loader2, CircleHelp } from '@lucide/vue';
+import { computed, onMounted, onUnmounted, ref } from 'vue';
+import { Folder, Play, Loader2, CircleHelp } from '@lucide/vue';
 import CharacteristicsForm from './CharacteristicsForm.vue';
 import ImageGuidelines from './ImageGuidelines.vue';
+import DatasetFolderPicker from './DatasetFolderPicker.vue';
 import TrainingStatus from './TrainingStatus.vue';
 import TrainingSettingsForm from './TrainingSettings.vue';
-import { startTraining } from '../api';
+import { ApiError, startTraining, fetchTraining, cancelTraining } from '../api';
 import type {
   ModelInfo,
   ModelType,
@@ -14,104 +15,155 @@ import type {
 } from '../types';
 const model = defineModel<ModelInfo>({ required: true });
 const settings = defineModel<TrainingSettings>('settings', { required: true });
-const { suggestedDataset } = defineProps<{ suggestedDataset?: File }>();
-const emit = defineEmits<{ notice: [message: string]; datasetUsed: [] }>();
-function useSuggestedDataset() {
-  file.value = suggestedDataset;
-  accepted.value = true;
-  emit('datasetUsed');
-}
+const emit = defineEmits<{ notice: [message: string] }>();
 const guidelines = ref<InstanceType<typeof ImageGuidelines>>();
-const accepted = ref(false);
-const fileInput = ref<HTMLInputElement>();
-const file = ref<File>();
-const dragging = ref(false);
+const folderPicker = ref<InstanceType<typeof DatasetFolderPicker>>();
+const datasetPath = ref('');
 const busy = ref(false);
+const stopping = ref(false);
 const error = ref('');
 const result = ref<TrainingResult>();
+const jobId = ref('');
+const terminal = computed(
+  () =>
+    !!result.value &&
+    ['completed', 'failed', 'cancelled'].includes(result.value.status),
+);
+const active = computed(() => !!jobId.value && !terminal.value);
 const modelTypes: ModelType[] = ['human', 'item', 'pet'];
-function selectFile(files?: FileList | null) {
-  dragging.value = false;
-  if (!files?.length) return;
-  if (files.length !== 1 || !files[0].name.toLowerCase().endsWith('.zip')) {
-    emit('notice', 'Please select one ZIP file.');
-    return;
+let timer: ReturnType<typeof setTimeout> | undefined;
+let revision = 0;
+let disposed = false;
+function rememberJob(id: string) {
+  try {
+    localStorage.setItem('local-training-id', id);
+  } catch {
+    /* Storage is optional. */
   }
-  file.value = files[0];
-  error.value = '';
+}
+function acceptResult(value: TrainingResult) {
+  if (!result.value) {
+    model.value.name = value.name;
+    if (value.modelType) model.value.type = value.modelType;
+    datasetPath.value = value.datasetPath;
+    if (value.settings) settings.value = { ...value.settings };
+    else settings.value.steps = value.steps;
+  }
+  result.value = value;
+  jobId.value = value.trainingId;
+  rememberJob(value.trainingId);
+}
+async function poll() {
+  clearTimeout(timer);
+  const id = jobId.value;
+  const currentRevision = ++revision;
+  if (!id || disposed) return;
+  try {
+    const status = await fetchTraining(id);
+    if (disposed || revision !== currentRevision) return;
+    acceptResult(status);
+    error.value = '';
+  } catch (cause) {
+    if (disposed || revision !== currentRevision) return;
+    error.value =
+      cause instanceof Error
+        ? cause.message
+        : 'Could not read training status.';
+    if (cause instanceof ApiError && cause.status === 404) {
+      jobId.value = '';
+      result.value = undefined;
+      rememberJob('');
+    }
+  } finally {
+    if (!disposed && revision === currentRevision && active.value)
+      timer = setTimeout(poll, 3000);
+  }
 }
 async function submit() {
-  if (busy.value || result.value) return;
-  if (!model.value.name.trim())
-    return emit('notice', 'Please enter a model name');
-  if (!Object.values(model.value.characteristics).some((value) => value !== ''))
-    return emit('notice', 'Please fill in the characteristics');
-  if (!file.value) return emit('notice', 'Please select a ZIP file');
-  if (
-    !settings.value.replicateUsername.trim() ||
-    !settings.value.replicateApiKey.trim()
-  ) {
-    emit(
+  if (busy.value || active.value) return;
+  if (settings.value.autoCaptioning)
+    return emit(
       'notice',
-      'Enter your Replicate username and API key in Training Settings.',
+      'Local LLM descriptions are planned. Uncheck this option and provide .txt captions for now.',
     );
-    document
-      .querySelector<HTMLDetailsElement>('#cloud-connection')
-      ?.setAttribute('open', '');
-    document.getElementById('replicateUsername')?.focus();
-    return;
-  }
   busy.value = true;
   error.value = '';
+  result.value = undefined;
+  jobId.value = '';
+  rememberJob('');
   try {
-    // Snapshot settings so edits during the upload cannot change the submitted job.
-    result.value = await startTraining(
-      file.value,
-      { ...model.value, characteristics: { ...model.value.characteristics } },
-      { ...settings.value },
+    acceptResult(
+      await startTraining(
+        datasetPath.value.trim(),
+        {
+          ...model.value,
+          name: model.value.name.trim(),
+          characteristics: { ...model.value.characteristics },
+        },
+        { ...settings.value },
+      ),
     );
-    emit('notice', 'Your model training has begun successfully');
+    void poll();
   } catch (cause) {
     error.value =
-      cause instanceof Error ? cause.message : 'Failed to start training';
+      cause instanceof Error ? cause.message : 'Failed to start training.';
   } finally {
     busy.value = false;
   }
 }
+async function cancel() {
+  if (!active.value || stopping.value) return;
+  stopping.value = true;
+  clearTimeout(timer);
+  ++revision;
+  try {
+    acceptResult(await cancelTraining(jobId.value));
+    error.value = '';
+  } catch (cause) {
+    error.value =
+      cause instanceof Error ? cause.message : 'Could not stop training.';
+  } finally {
+    stopping.value = false;
+    if (active.value) timer = setTimeout(poll, 3000);
+  }
+}
+onMounted(() => {
+  try {
+    jobId.value = localStorage.getItem('local-training-id') || '';
+  } catch {
+    /* Storage is optional. */
+  }
+  if (jobId.value) void poll();
+});
+onUnmounted(() => {
+  disposed = true;
+  ++revision;
+  clearTimeout(timer);
+});
 </script>
 <template>
   <form class="model-form" @submit.prevent="submit">
-    <fieldset class="training-grid" :disabled="busy || !!result">
+    <fieldset class="training-grid" :disabled="busy || active">
       <section class="card panel stack-large">
         <h2>Model Information</h2>
-        <div v-if="suggestedDataset" class="notice stack">
-          <p>
-            A generated portrait is ready to use as a training dataset. This
-            replaces the current ZIP selection.
-          </p>
-          <button
-            class="button outline"
-            type="button"
-            @click="useSuggestedDataset"
-          >
-            Use generated portrait
-          </button>
-        </div>
         <div class="field">
-          <label for="name">Model Name</label>
+          <label for="name">LoRA Name / Trigger Word</label>
           <input
             id="name"
             v-model="model.name"
-            placeholder="Enter model name"
+            placeholder="e.g. person_xyz"
+            pattern="[a-zA-Z0-9][a-zA-Z0-9_\-]*"
+            maxlength="64"
+            required
           />
+          <p class="muted">
+            Use this trigger word in your captions. Letters, numbers,
+            underscores and hyphens only.
+          </p>
         </div>
         <div class="field">
           <label for="training-base">Base Model</label>
-          <input
-            id="training-base"
-            value="FLUX.1 dev (current trainer)"
-            readonly
-          />
+          <input id="training-base" value="Z-Image Turbo" readonly />
         </div>
         <fieldset class="field">
           <legend>Model Type</legend>
@@ -128,18 +180,23 @@ async function submit() {
             </label>
           </div>
         </fieldset>
-        <div class="stack">
-          <span class="field-label">Characteristics</span>
-          <CharacteristicsForm
-            v-model="model.characteristics"
-            :type="model.type"
-          />
-        </div>
+        <details>
+          <summary>Characteristics (optional)</summary>
+          <div class="stack details-body">
+            <p class="muted">
+              Reserved for future local descriptions. Training currently uses
+              your .txt captions.
+            </p>
+            <CharacteristicsForm
+              v-model="model.characteristics"
+              :type="model.type"
+            />
+          </div>
+        </details>
         <div class="stack">
           <div class="spread">
-            <span class="field-label">Training Images</span>
+            <label for="dataset-path">Local Dataset Folder</label>
             <button
-              v-if="accepted"
               type="button"
               class="icon-button"
               aria-label="View image guidelines"
@@ -148,48 +205,25 @@ async function submit() {
               <CircleHelp />
             </button>
           </div>
+          <input
+            id="dataset-path"
+            v-model="datasetPath"
+            placeholder="/home/your-user/Pictures/my-dataset"
+            required
+          />
           <button
-            v-if="!accepted"
             type="button"
             class="button outline full"
-            @click="guidelines?.open()"
+            @click="folderPicker?.open(datasetPath.trim())"
           >
-            <Image />
-            View Image Guidelines
+            <Folder />
+            Browse Folders
           </button>
-          <template v-else>
-            <button
-              type="button"
-              class="dropzone"
-              :class="{ dragging }"
-              @click="fileInput?.click()"
-              @dragover.prevent="dragging = true"
-              @dragleave.prevent="dragging = false"
-              @drop.prevent="selectFile($event.dataTransfer?.files)"
-            >
-              <Upload />
-              <span>
-                {{
-                  dragging
-                    ? 'Drop the ZIP file here...'
-                    : 'Drag & drop your ZIP file here, or click to select'
-                }}
-              </span>
-            </button>
-            <input
-              ref="fileInput"
-              class="sr-only"
-              type="file"
-              accept=".zip,application/zip"
-              aria-label="Training ZIP file"
-              tabindex="-1"
-              @change="selectFile(($event.target as HTMLInputElement).files)"
-            />
-            <div v-if="file" class="card selected-file inline">
-              <Image />
-              <span>{{ file.name }}</span>
-            </div>
-          </template>
+          <p class="muted">
+            Select a folder on this PC with JPG, PNG or WebP images and matching
+            .txt captions (photo.jpg + photo.txt). Subfolders are included.
+            Original files are kept unchanged.
+          </p>
         </div>
       </section>
       <section class="card panel stack-large">
@@ -198,34 +232,59 @@ async function submit() {
         <button
           class="button primary full"
           type="submit"
-          :disabled="!file || !accepted || busy || !!result"
+          :disabled="
+            !datasetPath.trim() || busy || active || settings.autoCaptioning
+          "
         >
           <Loader2 v-if="busy" class="spin" />
           <Play v-else />
-          {{ busy ? 'Starting Training...' : 'Start Training' }}
+          {{
+            busy
+              ? 'Starting Training…'
+              : active
+                ? 'Training in Progress'
+                : 'Start Training'
+          }}
         </button>
+        <p v-if="settings.autoCaptioning" class="notice" role="status">
+          Local LLM descriptions are not implemented yet. Uncheck this option to
+          train with existing captions.
+        </p>
         <p class="muted">
-          Training currently runs on Replicate. Local training support is coming
-          next.
+          Runs locally using Ostris AI Toolkit. Start Docker and stop the
+          ComfyUI container before training to free the GPU.
         </p>
       </section>
     </fieldset>
     <section v-if="!result && !error" class="card panel training-ready stack">
       <div class="inline">
         <h2>Training Status</h2>
-        <span class="badge">{{ busy ? 'Starting' : 'Ready' }}</span>
+        <span class="badge">
+          {{ busy ? 'Starting' : active ? 'Checking' : 'Ready' }}
+        </span>
       </div>
       <p class="muted">
         {{
           busy
-            ? 'Uploading your dataset and submitting the training request…'
-            : 'Choose a dataset and review your settings to start.'
+            ? 'Preparing the local dataset and starting the training container…'
+            : active
+              ? 'Restoring your last training job…'
+              : 'Choose a dataset folder and review your settings to start.'
         }}
       </p>
-      <progress v-if="busy" aria-label="Starting training" />
-      <div v-else class="empty-progress" />
+      <progress
+        v-if="busy || active"
+        aria-label="Starting or checking training"
+      />
     </section>
-    <TrainingStatus :result="result" :error="error" />
+    <TrainingStatus
+      :result="result"
+      :error="error"
+      :active="active"
+      :stopping="stopping"
+      @cancel="cancel"
+    />
   </form>
-  <ImageGuidelines ref="guidelines" @accept="accepted = true" />
+  <DatasetFolderPicker ref="folderPicker" @select="datasetPath = $event" />
+  <ImageGuidelines ref="guidelines" />
 </template>

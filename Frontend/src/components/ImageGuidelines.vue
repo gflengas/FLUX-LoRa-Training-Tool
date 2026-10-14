@@ -8,9 +8,9 @@ const sections = [
   {
     title: 'Image Quality Requirements',
     items: [
-      'High-resolution images (minimum 512x512 pixels)',
+      'Use sharp images, preferably 512px or larger (minimum 256px per side)',
       'Clear, well-lit subjects with minimal blur',
-      'Consistent lighting conditions across images',
+      'Include natural variations in lighting',
       'Sharp focus on the main subject',
     ],
   },
@@ -26,10 +26,10 @@ const sections = [
   {
     title: 'Technical Specifications',
     items: [
-      'Supported formats: JPG, PNG',
-      'Maximum file size: 10MB per image',
-      'Recommended aspect ratio: 1:1 (square)',
-      'Color space: RGB',
+      'Supported formats: JPG, JPEG, PNG, WebP',
+      'Maximum file size: 50MB per image',
+      'Add a matching UTF-8 .txt caption for each image',
+      'Use your trigger word in the captions',
     ],
   },
   {

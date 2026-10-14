@@ -1,0 +1,7 @@
+services:
+  trainer:
+    image: lora-studio-training:local
+    build:
+      context: ./training
+    restart: "no"
+    profiles: [training]

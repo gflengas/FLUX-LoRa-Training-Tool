@@ -2,18 +2,16 @@
 
 A Vue 3 + TypeScript frontend for image inference, model selection, and LoRA
 training, with a Flask API. The UI uses native HTML controls, plain CSS, Lucide
-icons, and locally served Inter fonts. A small ZIP utility (`fflate`) packages
-generated images for transfer to the training form.
+icons, and locally served Inter fonts.
 
 ## Current status
 
 - **Inference:** local SDXL, FLUX.2 klein, Z-Image Turbo and Qwen-Image-2.1 Turbo generation through an on-demand ComfyUI container,
-  with queued jobs, output gallery, download, seed reuse, and transfer to training.
+  with queued jobs, output gallery, download and seed reuse.
 - **Model Settings:** discovers compatible SDXL checkpoints and complete supported model packages from ComfyUI.
   These workflows use the base models only; LoRA loading is not wired yet.
-- **Training:** model details, ZIP upload, and the original training settings.
-  The existing backend submits FLUX.1 dev training to Replicate and optionally
-  uses xAI for captions. Local GPU training is not implemented yet.
+- **Training:** local Z-Image Turbo LoRA jobs through Ostris AI Toolkit, with a
+  dataset folder browser, live logs, cancellation and local output paths.
 
 ## Run locally without Docker
 
@@ -200,7 +198,7 @@ Polling once after completion is required to copy the result.
 ### Model discovery and inference settings
 
 Text-to-image supports 512–1024 dimensions in multiples of 64, with 1–4 images.
-LoRA loading and local training are not wired yet.
+LoRA loading is not wired into inference yet.
 
 Add complete SDXL `.safetensors` checkpoints to `models/checkpoints/` (subfolders
 are supported), then click **Refresh** in Model Settings. The backend checks
@@ -236,19 +234,107 @@ API flow: `GET /api/models`, `POST /api/inference` (202 with `jobId`), then
 `GET /api/inference/<jobId>` until completed or failed. Completed results contain
 local image URLs and seeds. Multiple images use consecutive seeds.
 
-## Training with the existing backend
+## Training from the local frontend
 
-1. Open **Training** and enter a model name and subject characteristics.
-2. Read the image guidelines and choose a ZIP dataset. A flat ZIP of JPG images
-   is the currently smoke-tested format.
-3. Review captioning, steps, and advanced settings. Expand **Training service
-   connection** to enter Replicate credentials and, if needed, an xAI API key.
-4. Start training and follow the returned Replicate progress link.
+1. Open **Training** and enter a LoRA name/trigger word.
+2. Browse to a dataset folder on this PC, or paste its absolute path. Each image
+   needs a matching `.txt` caption (for example `photo.jpg` and `photo.txt`).
+3. Review the Z-Image Turbo settings. Start with the 512px, rank-16 defaults.
+4. Start training. The page polls progress, shows logs and local output paths,
+   and lets you stop the job. The last job ID is kept in browser storage so
+   refreshing the page reconnects to it; training continues independently.
 
-This sends data to external providers and can incur charges. Credentials are
-kept in application memory rather than browser storage; only the theme is
-saved in local storage. Optional xAI fallback configuration can be placed in
-an untracked repository-root `.env` file as `XAI_API_KEY`.
+Folder browsing uses `GET /api/training/folders?path=...` on the local backend.
+Keep the frontend and API bound to loopback as shown above.
+
+**Planned: local LLM image descriptions.** The checkbox is a placeholder for
+using a local vision-language model to generate captions, replacing the old xAI
+API step. This is not implemented yet. While checked, training is disabled;
+uncheck it and supply existing captions to train now. Future work: connect a
+local vision model, use the trigger/subject information when describing images,
+and write caption sidecars without silently overwriting existing captions.
+
+## Local Z-Image Turbo training backend
+
+Build the separate training image once (Docker and NVIDIA setup is shared with
+inference). Run Flask from a login session with Docker group access:
+
+```bash
+backend/.venv/bin/python -m pip install -r backend/requirements.txt
+docker compose -f compose.training.yml --profile training build trainer
+docker compose -f compose.inference.yml stop comfyui
+```
+
+Flask launches one GPU container per request; it exits when training finishes,
+uses `restart: no`, and exposes no ports. Stop ComfyUI before submitting training.
+An active training container blocks another training job. No cloud training or
+captioning service is called for `engine: local`. Omit `engine` (or use
+`replicate`) to retain the existing cloud API behavior.
+
+Use an existing local folder containing JPG/PNG/WebP images and matching UTF-8
+`.txt` captions (subfolders are allowed). Include the subject trigger in your
+captions. Images must be at least 256px per side. Missing captions are rejected;
+automatic local captioning is not implemented. The backend snapshots the dataset
+into the job folder, leaving your originals untouched. No upload is needed.
+
+Send `POST /api/training/start` with the absolute dataset directory:
+
+```json
+{
+  "engine": "local",
+  "modelId": "z-image-turbo",
+  "modelInfo": {"name": "person_xyz", "type": "human"},
+  "datasetPath": "/absolute/path/to/person-dataset",
+  "settings": {
+    "steps": 1000,
+    "loraRank": 16,
+    "learningRate": 0.0001,
+    "batchSize": 1,
+    "resolution": "512",
+    "optimizer": "adamw8bit",
+    "captionDropoutRate": 0.05,
+    "autoCaptioning": false,
+    "saveEvery": 250,
+    "seed": 42
+  }
+}
+```
+
+Settings are optional; the example shows the defaults. Model names use letters,
+digits, underscores or hyphens and also serve as trigger words. `resolution`
+accepts `512`, `768`, `1024` or a comma-separated combination. Start at 512 on a
+16 GB GPU; actual memory use must be checked on the dataset.
+
+- Submission returns HTTP 202 with `trainingId` and `trainingUrl`.
+- Poll `GET /api/training/<trainingId>` for status and the last 200 log lines.
+- Cancel with `POST /api/training/<trainingId>/cancel`.
+- `outputPath` points to the local checkpoint/sample directory. On completion,
+  `loraPath` points to the final adapter in `models/loras/`; no download is needed.
+- HTTP 400 indicates invalid input; 409 indicates a busy GPU workflow; 503
+  indicates unavailable Docker, missing training image or a launch failure.
+
+The pinned AI Toolkit revision uses its v2 Z-Image Turbo training adapter, a
+BF16 transformer before the adapter merge, then float8 quantization, gradient
+checkpointing and layer offloading (30% of transformer layers, 100% of text
+encoder layers) to leave GPU memory for the desktop. Sampling uses the toolkit's
+9-step, guidance-1 Turbo preset.
+The first job downloads the BF16 transformer (about 12.3 GB), adapter, text
+encoder, VAE and tokenizer/config files as needed. These can add roughly 21 GB;
+the existing INT8 inference checkpoint is not used as the training source.
+Downloads require network access and persist for later jobs.
+
+Storage:
+
+- `.runtime/training/<id>/`: prepared dataset, generated config and job status.
+- `.runtime/training/cache/`: Hugging Face and compilation caches.
+- `outputs/training/<id>/`: checkpoints, samples and optimizer state.
+- `models/loras/<id>.safetensors`: receives the final adapter when completion
+  is polled. Training weights are retained in the Hugging Face cache above.
+
+Completed results remain available after Docker stops. Stopped containers are
+retained for diagnostics; remove a specific one with
+`docker rm lora-training-<trainingId>` after completion/cancellation. Do not
+remove active containers. The inference LoRA loader is separate follow-up work.
 
 ## Development
 
@@ -276,10 +362,10 @@ been removed.
 
 ## Verification scope
 
-The frontend build checks Vue and TypeScript. Run backend inference tests with
+The frontend build checks Vue and TypeScript. Run backend tests with
 `cd backend && .venv/bin/python -m unittest discover -s tests -v`.
 They cover validation, unavailable engines, model filtering, submission/seeds,
-and image persistence after engine shutdown.
+image persistence, local dataset handling, training lifecycle and cancellation.
 
 Local SDXL inference was verified through the Vue page, Flask API, and ComfyUI
 Docker container on an RTX 5060 Ti (16 GB), using a 1024 × 768 dog/Ferrari prompt.
@@ -290,8 +376,17 @@ respectively, including model loading for those runs; these are smoke-test
 measurements, not a controlled performance benchmark. All eight downloaded
 component files passed their official SHA-256 checks.
 
-These workflows perform base-model inference only. Current Replicate/xAI
-availability and real GPU LoRA training have not been verified.
+On 2026-10-14, local Z-Image Turbo training completed a two-step, rank-16,
+512px smoke test on the RTX 5060 Ti using one previously generated portrait.
+The API returned the saved LoRA path; all 240 saved `lora_B` tensors contained
+nonzero updates, and all 480 tensors were finite. Layer offloading was needed
+with the desktop using about 3 GB of VRAM. This verifies the training pipeline,
+not portrait identity quality or sustained training at larger resolutions.
+The connected frontend also completed a two-step job, including folder selection,
+submission, polling, refresh recovery and displaying the saved local LoRA path.
+
+Inference still uses base models only. Current Replicate/xAI availability and
+a full person-LoRA quality evaluation have not been verified.
 
 ## License
 

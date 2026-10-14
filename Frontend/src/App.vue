@@ -42,11 +42,6 @@ function dismissConnectionError() {
   library.connectionError.value = '';
 }
 const notice = ref('');
-const suggestedDataset = ref<File>();
-function receiveDataset(dataset: File) {
-  suggestedDataset.value = dataset;
-  activeTab.value = 'training';
-}
 onMounted(library.refresh);
 const systemTheme = window.matchMedia('(prefers-color-scheme: dark)');
 function storedTheme() {
@@ -145,7 +140,7 @@ function moveTab(event: KeyboardEvent) {
       <InferencePage
         :library="library"
         @models="activeTab = 'models'"
-        @train="receiveDataset"
+        @train="activeTab = 'training'"
         @notice="notice = $event"
       />
     </section>
@@ -166,8 +161,6 @@ function moveTab(event: KeyboardEvent) {
       <ModelInfoForm
         v-model="model"
         v-model:settings="settings"
-        :suggested-dataset="suggestedDataset"
-        @dataset-used="suggestedDataset = undefined"
         @notice="notice = $event"
       />
     </section>

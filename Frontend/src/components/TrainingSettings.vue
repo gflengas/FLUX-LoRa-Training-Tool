@@ -1,39 +1,32 @@
 <script setup lang="ts">
 import { ref } from 'vue';
-import { ChevronDown, ChevronUp, CircleHelp } from '@lucide/vue';
-import SecretInput from './SecretInput.vue';
+import { ChevronDown, ChevronUp } from '@lucide/vue';
 import type { TrainingSettings } from '../types';
 const settings = defineModel<TrainingSettings>({ required: true });
 const advanced = ref(true);
-const optimizers = {
-  adamw8bit: 'AdamW 8-bit',
-  prodigy: 'Prodigy',
-  adam8bit: 'Adam 8-bit',
-  lion8bit: 'Lion 8-bit',
-  adam: 'Adam',
-  adamw: 'AdamW',
-  lion: 'Lion',
-  adagrad: 'Adagrad',
-  adafactor: 'Adafactor',
-};
+const optimizers = { adamw8bit: 'AdamW 8-bit', adamw: 'AdamW' };
 </script>
 <template>
   <div class="stack">
     <div class="spread">
-      <label for="autoCaptioning">Auto Captioning</label>
+      <label for="autoCaptioning">Generate descriptions with a local LLM</label>
       <input
         id="autoCaptioning"
+        aria-describedby="captioning-note"
         v-model="settings.autoCaptioning"
-        class="switch"
         type="checkbox"
-        role="switch"
       />
     </div>
+    <p class="muted" id="captioning-note">
+      Planned feature — not available yet. For now, leave this unchecked and
+      provide a matching .txt caption for each image.
+    </p>
     <div class="field">
       <label for="steps">Steps</label>
       <input
         id="steps"
         v-model.number="settings.steps"
+        max="10000"
         type="number"
         min="1"
         required
@@ -58,7 +51,8 @@ const optimizers = {
           id="loraRank"
           v-model.number="settings.loraRank"
           type="number"
-          min="1"
+          min="4"
+          max="128"
           required
         />
       </div>
@@ -69,7 +63,8 @@ const optimizers = {
           v-model.number="settings.learningRate"
           type="number"
           step="any"
-          min="0"
+          min="0.00000001"
+          max="0.001"
           required
         />
       </div>
@@ -77,6 +72,7 @@ const optimizers = {
         <label for="batchSize">Batch Size</label>
         <input
           id="batchSize"
+          max="4"
           v-model.number="settings.batchSize"
           type="number"
           min="1"
@@ -103,7 +99,7 @@ const optimizers = {
           type="number"
           step="0.01"
           min="0"
-          max="1"
+          max="0.5"
           required
         />
       </div>
@@ -120,73 +116,29 @@ const optimizers = {
         </select>
       </div>
     </div>
-    <details>
-      <summary>Optional publishing</summary>
-      <div class="stack details-body">
-        <div class="field">
-          <label for="hfRepoId">Hugging Face Repository ID</label>
-          <input
-            id="hfRepoId"
-            v-model="settings.hfRepoId"
-            placeholder="username/repository"
-          />
-        </div>
-        <div class="field">
-          <label for="hfToken">Hugging Face Token</label>
-          <SecretInput
-            id="hfToken"
-            v-model="settings.hfToken"
-            label="Hugging Face token"
-            placeholder="Enter your Hugging Face token"
-          />
-        </div>
+    <div class="field-grid">
+      <div class="field">
+        <label for="saveEvery">Save Every (steps)</label>
+        <input
+          id="saveEvery"
+          v-model.number="settings.saveEvery"
+          type="number"
+          min="1"
+          max="1000"
+          required
+        />
       </div>
-    </details>
-    <details id="cloud-connection">
-      <summary>Training service connection</summary>
-      <div class="stack details-body">
-        <p class="muted">
-          The current trainer uses Replicate. Enable Auto Captioning to skip
-          xAI.
-        </p>
-        <div class="field">
-          <label for="replicateUsername">Replicate Username</label>
-          <input
-            id="replicateUsername"
-            v-model="settings.replicateUsername"
-            placeholder="Enter your Replicate username"
-            autocomplete="off"
-          />
-        </div>
-        <div class="field">
-          <label for="replicateApiKey">Replicate API Key</label>
-          <SecretInput
-            id="replicateApiKey"
-            v-model="settings.replicateApiKey"
-            label="Replicate API key"
-            placeholder="Enter your Replicate API key"
-          />
-        </div>
-        <div class="field">
-          <div class="inline">
-            <label for="xaiApiKey">xAI API Key</label>
-            <button
-              type="button"
-              class="help"
-              title="Leave empty and enable Auto Captioning to skip detailed descriptions using xAI."
-              aria-label="xAI captioning help"
-            >
-              <CircleHelp />
-            </button>
-          </div>
-          <SecretInput
-            id="xaiApiKey"
-            v-model="settings.xaiApiKey"
-            label="xAI API key"
-            placeholder="Enter your xAI API key"
-          />
-        </div>
+      <div class="field">
+        <label for="trainingSeed">Seed</label>
+        <input
+          id="trainingSeed"
+          v-model.number="settings.seed"
+          type="number"
+          min="0"
+          max="4294967295"
+          required
+        />
       </div>
-    </details>
+    </div>
   </div>
 </template>
